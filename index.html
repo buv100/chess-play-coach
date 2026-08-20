@@ -5,17 +5,21 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
   <meta name="mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
-  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <title>Play Coach</title>
   <script>
-    if (/\/chess-play-coach\/?/.test(location.pathname)) {
-      document.write('<base href="/chess-play-coach/">');
+    if ("serviceWorker" in navigator) {
+      navigator.serviceWorker.getRegistrations().then(function (regs) {
+        regs.forEach(function (r) { r.unregister(); });
+      });
+    }
+    if (window.caches) {
+      caches.keys().then(function (keys) {
+        keys.forEach(function (k) { caches.delete(k); });
+      });
     }
   </script>
-  <link rel="manifest" href="manifest.json" />
+  <link rel="stylesheet" href="style.css?v=6" />
   <meta name="theme-color" content="#1c1916" />
-  <link rel="apple-touch-icon" href="icon-192.png" />
-  <link rel="stylesheet" href="style.css" />
 </head>
 <body>
   <header class="coach-bar">
@@ -90,8 +94,21 @@
     </div>
   </div>
 
-  <script src="engine.js"></script>
-  <script src="coach.js"></script>
-  <script src="app.js"></script>
+  <script>
+    (function () {
+      var base = location.pathname.indexOf("/chess-play-coach") === 0
+        ? "/chess-play-coach/"
+        : "./";
+      var s = document.createElement("script");
+      s.src = base + "game.js?v=6";
+      s.onerror = function () {
+        document.body.insertAdjacentHTML(
+          "afterbegin",
+          '<p style="padding:12px;background:#c23b22;color:#fff">Could not load game.js</p>'
+        );
+      };
+      document.body.appendChild(s);
+    })();
+  </script>
 </body>
 </html>
