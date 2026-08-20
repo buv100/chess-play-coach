@@ -198,10 +198,11 @@ body {
   border-radius: 8px;
   overflow: hidden;
   box-shadow: var(--shadow), 0 0 0 1px rgba(255,255,255,0.06);
-  background: #b58863;
 }
 
 .board {
+  position: absolute;
+  inset: 0;
   width: 100%;
   height: 100%;
   display: grid;
@@ -209,6 +210,7 @@ body {
   grid-template-rows: repeat(8, 1fr);
   user-select: none;
   touch-action: manipulation;
+  background: #f0d9b5;
 }
 
 .arrows {
