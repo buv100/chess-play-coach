@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <title>Play Coach</title>
+  <link rel="manifest" href="manifest.json" />
+  <meta name="theme-color" content="#1c1916" />
+  <link rel="apple-touch-icon" href="icon-192.png" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@500;700;800&family=Fraunces:opsz,wght@9..144,600;9..144,700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <header class="coach-bar">
+    <div class="magnus" aria-hidden="true"></div>
+    <div class="coach-copy">
+      <div class="coach-row">
+        <strong class="brand">Magnus</strong>
+        <span id="coachTitle" class="badge idle">Coach</span>
+      </div>
+      <p id="coachText">Alright. Let's play.</p>
+      <p id="tipText" class="tip-line"></p>
+    </div>
+    <div class="coach-actions">
+      <button id="installBtn" type="button" class="idea ghost-idea hidden">Install</button>
+      <button id="ideaBtn" type="button" class="idea">Idea</button>
+    </div>
+  </header>
+
+  <main class="play">
+    <div id="evalCol" class="eval-col">
+      <div id="evalFill" class="eval-fill"></div>
+    </div>
+    <div class="board-wrap">
+      <div class="player top">
+        <span class="avatar black"></span>
+        <span>Coach bot</span>
+        <span id="oppRating" class="muted">1000</span>
+      </div>
+      <div class="board-frame">
+        <div id="board" class="board"></div>
+        <svg id="arrows" class="arrows" viewBox="0 0 8 8" preserveAspectRatio="none">
+          <defs>
+            <marker id="hintHead" viewBox="0 0 10 10" refX="7" refY="5" markerWidth="3.5" markerHeight="3.5" orient="auto-start-reverse">
+              <path d="M0 0 L10 5 L0 10 z" fill="#eb9950"></path>
+            </marker>
+            <marker id="sugHead" viewBox="0 0 10 10" refX="7" refY="5" markerWidth="3.5" markerHeight="3.5" orient="auto-start-reverse">
+              <path d="M0 0 L10 5 L0 10 z" fill="#96bc4b"></path>
+            </marker>
+            <marker id="threatHead" viewBox="0 0 10 10" refX="7" refY="5" markerWidth="3.2" markerHeight="3.2" orient="auto-start-reverse">
+              <path d="M0 0 L10 5 L0 10 z" fill="#c23b22"></path>
+            </marker>
+          </defs>
+          <g id="threatLayer"></g>
+          <line id="sugArrow" class="sug hidden" x1="0" y1="0" x2="0" y2="0" marker-end="url(#sugHead)"></line>
+          <line id="hintArrow" class="hint hidden" x1="0" y1="0" x2="0" y2="0" marker-end="url(#hintHead)"></line>
+        </svg>
+      </div>
+      <div class="player bottom">
+        <span class="avatar white"></span>
+        <span>You</span>
+      </div>
+    </div>
+  </main>
+
+  <footer class="dock">
+    <div id="levels" class="levels"></div>
+    <div class="tools">
+      <button id="hintBtn" type="button">Hint</button>
+      <button id="undoBtn" type="button">Undo</button>
+      <button id="newGame" type="button" class="ghost">New</button>
+      <button id="settingsBtn" type="button" class="ghost" aria-label="Settings">⚙</button>
+    </div>
+  </footer>
+
+  <div id="settings" class="sheet hidden">
+    <div class="sheet-card">
+      <h3>Coach options</h3>
+      <label><input id="optSuggest" type="checkbox" /> Suggestion arrows (only after Hint / Idea)</label>
+      <label><input id="optThreat" type="checkbox" checked /> Threat arrows</label>
+      <label><input id="optEval" type="checkbox" checked /> Evaluation bar</label>
+      <button id="closeSettings" type="button">Done</button>
+    </div>
+  </div>
+
+  <script src="engine.js"></script>
+  <script src="coach.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
