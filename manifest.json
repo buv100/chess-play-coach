@@ -2,20 +2,21 @@
   "name": "Play Coach Chess",
   "short_name": "Chess Coach",
   "description": "Play chess with a coach — works offline on your phone",
-  "start_url": "./index.html",
+  "start_url": "/chess-play-coach/",
+  "scope": "/chess-play-coach/",
   "display": "standalone",
   "background_color": "#1c1916",
   "theme_color": "#1c1916",
   "orientation": "portrait",
   "icons": [
     {
-      "src": "icon-192.png",
+      "src": "/chess-play-coach/icon-192.png",
       "sizes": "192x192",
       "type": "image/png",
       "purpose": "any maskable"
     },
     {
-      "src": "icon-512.png",
+      "src": "/chess-play-coach/icon-512.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any maskable"

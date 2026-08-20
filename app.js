@@ -19,6 +19,16 @@ const PIECE_SVG = {
 const E = window.ChessEngine;
 const speak = window.magnusSpeak;
 
+if (!E || typeof speak !== "function") {
+  document.body.innerHTML =
+    '<main style="padding:24px;font-family:sans-serif;color:#fff;background:#1c1916;min-height:100vh">' +
+    "<h1>Chess Coach failed to load</h1>" +
+    "<p>Refresh the page (pull down or clear site data), then open:</p>" +
+    '<p><a style="color:#8bc34a" href="https://buv100.github.io/chess-play-coach/">https://buv100.github.io/chess-play-coach/</a></p>' +
+    "</main>";
+  throw new Error("ChessEngine/magnusSpeak missing");
+}
+
 const boardEl = document.getElementById("board");
 const coachTitle = document.getElementById("coachTitle");
 const coachText = document.getElementById("coachText");
@@ -525,7 +535,19 @@ if (installBtn) {
 }
 
 if ("serviceWorker" in navigator) {
-  navigator.serviceWorker.register("./sw.js").catch(() => {});
+  navigator.serviceWorker
+    .register("./sw.js")
+    .then((reg) => reg.update())
+    .catch(() => {});
 }
 
-startPractice();
+try {
+  startPractice();
+} catch (err) {
+  document.body.insertAdjacentHTML(
+    "afterbegin",
+    '<p style="padding:12px;color:#fff;background:#c23b22">Error: ' +
+      String(err && err.message ? err.message : err) +
+      "</p>"
+  );
+}

@@ -23,11 +23,8 @@ html, body {
   height: 100%;
   overflow: hidden;
   color: var(--ink);
-  font-family: "DM Sans", "Segoe UI", sans-serif;
-  background:
-    radial-gradient(1200px 600px at 20% -10%, #3a3228 0%, transparent 55%),
-    radial-gradient(900px 500px at 100% 0%, #2a3524 0%, transparent 45%),
-    linear-gradient(180deg, #221e1a, var(--bg0));
+  font-family: "DM Sans", "Segoe UI", Tahoma, sans-serif;
+  background: #1c1916;
 }
 
 body {
@@ -170,7 +167,6 @@ body {
   min-height: 0;
   display: grid;
   grid-template-rows: 24px minmax(0, 1fr) 24px;
-  container-type: size;
 }
 
 .player {
@@ -191,14 +187,18 @@ body {
 
 .board-frame {
   position: relative;
-  width: min(100cqw, 100cqh);
-  height: min(100cqw, 100cqh);
+  width: min(100%, calc(100dvh - 220px));
+  max-width: 100%;
+  aspect-ratio: 1 / 1;
+  height: auto;
+  max-height: calc(100dvh - 220px);
   margin: 0 auto;
   justify-self: center;
   align-self: center;
   border-radius: 8px;
   overflow: hidden;
   box-shadow: var(--shadow), 0 0 0 1px rgba(255,255,255,0.06);
+  background: #b58863;
 }
 
 .board {
