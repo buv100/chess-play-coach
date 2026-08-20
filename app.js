@@ -53,6 +53,7 @@ let boardBuilt = false;
 let squares = [];
 let paintKey = "";
 let snapshots = [];
+let pendingHint = null;
 
 let state = {
   board: START,
@@ -141,6 +142,7 @@ function playBotSoon() {
     state.hintStep = 0;
     state.hintFrom = null;
     state.hintTo = null;
+    pendingHint = null;
     state.suggestion = null;
     state.showSuggestion = false;
     refreshMeta();
@@ -367,6 +369,7 @@ function sendMove(move) {
   state.hintStep = 0;
   state.hintFrom = null;
   state.hintTo = null;
+  pendingHint = null;
   state.suggestion = null;
   state.showSuggestion = false;
   refreshMeta();
@@ -383,6 +386,7 @@ function startPractice() {
   targets = [];
   busy = false;
   snapshots = [];
+  pendingHint = null;
   state = {
     board: START,
     turn: "0",
@@ -416,28 +420,39 @@ function setLevel(level) {
 
 function askHint() {
   if (!canHumanMove()) return;
-  const move = E.bestMove(state.board, true);
-  if (!move) {
-    state.coach = speak("idle", { text: "No good hint right now." });
+
+  if (state.hintStep < 1 || !pendingHint) {
+    const move = E.bestMove(state.board, true);
+    if (!move) {
+      state.coach = speak("idle", { text: "No good hint right now." });
+      renderBoard(true);
+      return;
+    }
+    pendingHint = move;
+    const from = move.slice(0, 2);
+    const piece = state.board[E.squareToIndex(from)];
+    const names = { p: "pawn", n: "knight", b: "bishop", r: "rook", q: "queen", k: "king" };
+    const name = names[(piece || "p").toLowerCase()] || "piece";
+    state.hintStep = 1;
+    state.hintFrom = from;
+    state.hintTo = null;
+    state.suggestion = null;
+    state.showSuggestion = false;
+    state.coach = speak("hint1", { piece: name, from });
     renderBoard(true);
     return;
   }
+
+  const move = pendingHint;
   const from = move.slice(0, 2);
   const to = move.slice(2, 4);
   const piece = state.board[E.squareToIndex(from)];
   const names = { p: "pawn", n: "knight", b: "bishop", r: "rook", q: "queen", k: "king" };
   const name = names[(piece || "p").toLowerCase()] || "piece";
-  if (state.hintStep < 1) {
-    state.hintStep = 1;
-    state.hintFrom = from;
-    state.hintTo = null;
-    state.coach = speak("hint1", { piece: name, from });
-  } else {
-    state.hintStep = 2;
-    state.hintFrom = from;
-    state.hintTo = to;
-    state.coach = speak("hint2", { piece: name, from, to });
-  }
+  state.hintStep = 2;
+  state.hintFrom = from;
+  state.hintTo = to;
+  state.coach = speak("hint2", { piece: name, from, to });
   renderBoard(true);
 }
 
@@ -460,6 +475,7 @@ function undoMove() {
   state.hintStep = 0;
   state.hintFrom = null;
   state.hintTo = null;
+  pendingHint = null;
   selected = null;
   targets = [];
   refreshMeta();
@@ -468,22 +484,7 @@ function undoMove() {
 }
 
 function showIdea() {
-  if (!canHumanMove()) return;
-  refreshMeta();
-  const best = E.bestMove(state.board, true);
-  if (!best) {
-    state.coach = speak("tip", { tip: state.tip });
-    renderBoard(true);
-    return;
-  }
-  state.hintStep = 2;
-  state.hintFrom = best.slice(0, 2);
-  state.hintTo = best.slice(2, 4);
-  state.coach = speak("suggest", {
-    idea: `${best.slice(0, 2)} → ${best.slice(2, 4)}`,
-    tip: state.tip,
-  });
-  renderBoard(true);
+  askHint();
 }
 
 function saveOptions() {

@@ -53,12 +53,12 @@ function magnusSpeak(kind, extra) {
       "No. This hangs too much. Undo, or ask for a Hint.",
     ],
     hint1: [
-      from ? `Look at your ${piece} on ${from}. What should it do?` : `Focus on your ${piece}.`,
-      from ? `Hint: the ${piece} on ${from} is the key.` : "Hint: find the piece that improves most.",
+      "Look at the highlighted piece. That's the one to move.",
+      from ? `Move your ${piece} (highlighted). Press Hint again for where.` : `Focus on your ${piece}. Press Hint again for where.`,
     ],
     hint2: [
-      from && to ? `This is the move: ${from} to ${to}.` : "This is the move I would play.",
-      from && to ? `Play ${from}${to}. That's just correct.` : "Here's the best move.",
+      from && to ? `Now play it: ${from} → ${to}.` : "Here's where it should go.",
+      from && to ? `Destination: ${to}. Play ${from}${to}.` : "This is the full move.",
     ],
     undo: ["Okay, take it back. Find something better.", "Fine. Try again.", "Undone. Look for a cleaner idea."],
     suggest: [
