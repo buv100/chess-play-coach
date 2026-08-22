@@ -6,7 +6,7 @@
   <meta name="mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-  <title>Play Coach</title>
+  <title>Chess Coach</title>
   <script>
     if ("serviceWorker" in navigator) {
       navigator.serviceWorker.getRegistrations().then(function (regs) {
@@ -19,10 +19,30 @@
       });
     }
   </script>
-  <link rel="stylesheet" href="style.css?v=15" />
+  <link rel="stylesheet" href="style.css?v=16" />
   <meta name="theme-color" content="#312e2b" />
 </head>
 <body>
+  <div id="homeScreen" class="home-screen">
+    <div class="home-inner">
+      <h1 class="home-title">Chess Coach</h1>
+      <p class="home-sub">Train with legends — play or solve</p>
+      <div class="mode-cards">
+        <button id="modeCoach" type="button" class="mode-card">
+          <span class="mode-icon" aria-hidden="true">♟</span>
+          <strong>Play Coach</strong>
+          <span class="mode-desc">Play a full game with a legendary coach. Move feedback, hints, and voice.</span>
+        </button>
+        <button id="modePuzzle" type="button" class="mode-card mode-card-accent">
+          <span class="mode-icon" aria-hidden="true">🧩</span>
+          <strong>Puzzles</strong>
+          <span class="mode-desc">Find the best move in a set position. Coach, hints, and move ratings.</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <div id="gameRoot" class="game-root hidden">
   <header class="coach-panel">
     <div class="coach-top">
       <div id="magnusAvatar" class="magnus-avatar">
@@ -31,7 +51,7 @@
       <div class="coach-identity">
         <div class="coach-row">
           <strong id="coachBrand" class="brand">Magnus Carlsen</strong>
-          <span class="play-coach-label">Play Coach</span>
+          <span id="playCoachLabel" class="play-coach-label">Play Coach</span>
         </div>
         <span id="coachStyle" class="coach-style-line">Simplify, squeeze, win endgames</span>
         <span id="coachTitle" class="badge idle">Coach</span>
@@ -60,6 +80,7 @@
           <div class="player-meta">
             <span id="oppName" class="player-name">Coach</span>
             <span id="oppRating" class="player-rating">1000</span>
+            <span id="puzzleMeta" class="player-rating puzzle-meta hidden"></span>
           </div>
         </div>
         <div id="clockTop" class="player-clock">∞</div>
@@ -100,6 +121,7 @@
     <div class="tools">
       <button id="hintBtn" type="button">Hint</button>
       <button id="undoBtn" type="button">Undo</button>
+      <button id="homeBtn" type="button" class="ghost">Home</button>
       <button id="newGame" type="button" class="ghost">New Game</button>
       <button id="settingsBtn" type="button" class="ghost" aria-label="Settings">⚙</button>
     </div>
@@ -117,6 +139,7 @@
       <button id="closeSettings" type="button">Done</button>
     </div>
   </div>
+  </div><!-- gameRoot -->
 
   <script>
     (function () {
@@ -124,7 +147,7 @@
         ? "/chess-play-coach/"
         : "./";
       var v = document.createElement("script");
-      v.src = base + "voice.js?v=15";
+      v.src = base + "voice.js?v=16";
       v.onload = function () {
         document.body.appendChild(s);
       };
@@ -133,7 +156,7 @@
       };
       document.body.appendChild(v);
       var s = document.createElement("script");
-      s.src = base + "game.js?v=15";
+      s.src = base + "game.js?v=16";
       s.onerror = function () {
         document.body.insertAdjacentHTML(
           "afterbegin",

@@ -18,6 +18,7 @@ const PIECE_SVG = {
 
 const E = window.ChessEngine;
 const CoachLib = window.CoachLib;
+const PZ = window.PuzzleLib;
 const speak = CoachLib ? CoachLib.coachSpeak : window.magnusSpeak;
 
 if (!E || typeof speak !== "function") {
@@ -62,8 +63,19 @@ const voiceBtn = document.getElementById("voiceBtn");
 const installBtn = document.getElementById("installBtn");
 const playerTop = document.getElementById("playerTop");
 const playerBottom = document.getElementById("playerBottom");
+const homeScreen = document.getElementById("homeScreen");
+const gameRoot = document.getElementById("gameRoot");
+const modeCoachBtn = document.getElementById("modeCoach");
+const modePuzzleBtn = document.getElementById("modePuzzle");
+const homeBtn = document.getElementById("homeBtn");
+const playCoachLabel = document.getElementById("playCoachLabel");
+const puzzleMeta = document.getElementById("puzzleMeta");
 
 const LEVELS = E.LEVELS;
+let gameMode = "home";
+let puzzleIndex = 0;
+let puzzleStep = 0;
+let currentPuzzle = null;
 let selectedLevel = 5;
 let targets = [];
 let options = { suggestionArrows: false, threatArrows: true, evaluationBar: true };
@@ -109,7 +121,200 @@ function applyMove(board, move) {
   return cells.join("");
 }
 
+function humanIsWhite() {
+  if (gameMode === "puzzle" && currentPuzzle) {
+    return currentPuzzle.side !== "black";
+  }
+  return true;
+}
+
+function humanTurnMatches() {
+  return humanIsWhite() ? state.turn === "0" : state.turn === "1";
+}
+
+function updateModeUI() {
+  document.body.classList.toggle("mode-home", gameMode === "home");
+  document.body.classList.toggle("mode-coach", gameMode === "coach");
+  document.body.classList.toggle("mode-puzzle", gameMode === "puzzle");
+  if (homeScreen) homeScreen.classList.toggle("hidden", gameMode !== "home");
+  if (gameRoot) gameRoot.classList.toggle("hidden", gameMode === "home");
+  if (levelsEl) levelsEl.classList.toggle("hidden", gameMode === "puzzle");
+  if (playCoachLabel) {
+    playCoachLabel.textContent = gameMode === "puzzle" ? "Puzzles" : "Play Coach";
+  }
+  if (newGameBtn) {
+    newGameBtn.textContent = gameMode === "puzzle" ? "Next" : "New Game";
+  }
+  if (undoBtn) {
+    undoBtn.textContent = gameMode === "puzzle" ? "Reset" : "Undo";
+  }
+  if (oppRating) oppRating.classList.toggle("hidden", gameMode === "puzzle");
+  if (puzzleMeta) puzzleMeta.classList.toggle("hidden", gameMode !== "puzzle");
+  if (playerTop) playerTop.classList.toggle("hidden", gameMode === "puzzle");
+  if (ideaBtn) ideaBtn.classList.toggle("hidden", gameMode === "puzzle");
+}
+
+function showHomeScreen() {
+  gameMode = "home";
+  currentPuzzle = null;
+  updateModeUI();
+}
+
+function enterCoachMode() {
+  gameMode = "coach";
+  updateModeUI();
+  applyCoachUI();
+  renderCoachPicker();
+  startPractice();
+}
+
+function getPuzzleSolutionMove() {
+  if (!currentPuzzle || !currentPuzzle.moves) return null;
+  return currentPuzzle.moves[puzzleStep] || null;
+}
+
+function resetPuzzlePosition() {
+  if (!currentPuzzle) return;
+  puzzleStep = 0;
+  state.board = currentPuzzle.board;
+  state.turn = currentPuzzle.side === "black" ? "1" : "0";
+  state.puzzleSolved = false;
+  state.gameOver = false;
+  state.hintStep = 0;
+  state.hintFrom = null;
+  state.hintTo = null;
+  pendingHint = null;
+  lastMove = null;
+  selected = null;
+  targets = [];
+  state.lastRating = null;
+  state.ratingDetail = null;
+  state.history = [];
+  state.coach = speak("start", {
+    text: currentPuzzle.intro || "Find the best move in this position.",
+    tip: currentPuzzle.theme || "",
+  });
+  if (puzzleMeta) {
+    puzzleMeta.textContent = `#${currentPuzzle.id} · ${currentPuzzle.title}`;
+  }
+  if (window.CoachVoice) window.CoachVoice.reset();
+  refreshMeta();
+  renderBoard(true);
+}
+
+function loadPuzzle(index) {
+  if (!PZ) return;
+  currentPuzzle = PZ.getPuzzle(index);
+  puzzleIndex = index;
+  boardBuilt = false;
+  resetPuzzlePosition();
+}
+
+function enterPuzzleMode() {
+  if (!PZ) return;
+  gameMode = "puzzle";
+  updateModeUI();
+  applyCoachUI();
+  renderCoachPicker();
+  puzzleIndex = Math.floor(Math.random() * PZ.PUZZLES.length);
+  loadPuzzle(puzzleIndex);
+}
+
+function advancePuzzleLine(move) {
+  state.board = applyMove(state.board, move);
+  lastMove = move;
+  puzzleStep += 1;
+  state.turn = state.turn === "0" ? "1" : "0";
+
+  while (currentPuzzle && puzzleStep < currentPuzzle.moves.length) {
+    const userTurn = humanTurnMatches();
+    if (userTurn) break;
+    const auto = currentPuzzle.moves[puzzleStep];
+    state.board = applyMove(state.board, auto);
+    lastMove = auto;
+    puzzleStep += 1;
+    state.turn = state.turn === "0" ? "1" : "0";
+  }
+
+  if (currentPuzzle && puzzleStep >= currentPuzzle.moves.length) {
+    state.puzzleSolved = true;
+    state.gameOver = true;
+    state.coach = speak("brilliant", {
+      text: `Puzzle solved! ${currentPuzzle.title}.`,
+      tip: "Press Next for another puzzle.",
+    });
+    saveRatingDetail({ kind: "brilliant", why: "Correct puzzle line.", impact: currentPuzzle.theme, symbol: "!!" }, move, false);
+  } else {
+    state.coach = speak("good", {
+      text: "Correct. Now find the follow-up.",
+      tip: currentPuzzle.theme || "",
+    });
+  }
+}
+
+function sendPuzzleMove(move) {
+  if (busy || !canHumanMove()) return;
+  const white = humanIsWhite();
+  const legal = E.legalMoves(state.board, white);
+  if (!legal.includes(move)) {
+    state.coach = speak("illegal");
+    renderBoard(true);
+    return;
+  }
+
+  const solution = getPuzzleSolutionMove();
+  if (!solution) return;
+
+  busy = true;
+  const hintUsed = state.hintStep >= 1 || !!(pendingHint && pendingHint === move);
+  state.hintStep = 0;
+  state.hintFrom = null;
+  state.hintTo = null;
+  pendingHint = null;
+
+  if (move === solution) {
+    let analysis = { kind: "best", why: "That matches the puzzle solution.", impact: currentPuzzle.theme || "", symbol: "!" };
+    try {
+      analysis = E.analyzeMove(state.board, white, move, puzzleStep, { forCoach: false });
+      analysis.kind = puzzleStep + 1 >= currentPuzzle.moves.length ? "brilliant" : "best";
+      analysis.why = "Correct — that's the idea in this position.";
+    } catch (_) {
+      /* keep default */
+    }
+    saveRatingDetail(analysis, move, false);
+    state.coach = coachForMove(analysis, move, { byCoach: false, hintUsed });
+    advancePuzzleLine(move);
+  } else {
+    let analysis = null;
+    try {
+      analysis = E.analyzeMove(state.board, white, move, puzzleStep, { forCoach: false });
+    } catch (_) {
+      analysis = { kind: "mistake", why: "", impact: "", symbol: "?" };
+    }
+    if (["best", "excellent", "good"].includes(analysis.kind)) {
+      analysis.kind = "inaccuracy";
+    }
+    analysis.why = `${analysis.why || ""} Not the puzzle move — look for ${currentPuzzle.theme.toLowerCase()}.`.trim();
+    analysis.impact = `Hint: try ${solution.slice(0, 2)}→${solution.slice(2, 4)} if you're stuck.`;
+    saveRatingDetail(analysis, move, false);
+    state.coach = coachForMove(analysis, move, { byCoach: false, hintUsed });
+  }
+
+  refreshMeta();
+  renderBoard(true);
+  busy = false;
+}
+
 function refreshMeta() {
+  if (gameMode === "puzzle") {
+    const white = humanIsWhite();
+    state.evalBar = E.evalBar(state.board);
+    state.tip = currentPuzzle ? currentPuzzle.theme || "" : "";
+    state.threats = options.threatArrows ? E.findThreats(state.board, white) : [];
+    state.canUndo = !!currentPuzzle && !state.puzzleSolved;
+    state.connected = true;
+    return;
+  }
   const whiteTurn = state.turn === "0";
   state.evalBar = E.evalBar(state.board);
   state.tip = E.quickTip(state.board, whiteTurn, state.history.length);
@@ -497,26 +702,33 @@ function renderBoard(force) {
   if (playerBottom) {
     playerBottom.classList.toggle("active", state.turn === "0" && !state.gameOver);
   }
-  undoBtn.disabled = !state.canUndo || !!state.thinking;
-  hintBtn.disabled = !!state.thinking || !!state.gameOver || state.turn !== "0";
+  undoBtn.disabled = gameMode === "puzzle" ? !currentPuzzle || !!state.puzzleSolved : !state.canUndo || !!state.thinking;
+  hintBtn.disabled =
+    gameMode === "puzzle"
+      ? !!state.thinking || !!state.puzzleSolved || !humanTurnMatches() || busy
+      : !!state.thinking || !!state.gameOver || state.turn !== "0";
   renderCoach();
 }
 
 function canHumanMove() {
+  if (gameMode === "puzzle") {
+    return !state.puzzleSolved && !state.thinking && humanTurnMatches() && !busy;
+  }
   return !state.gameOver && !state.thinking && state.turn === "0" && !busy;
 }
 
 function loadTargets(from) {
-  return E.legalMoves(state.board, true)
+  return E.legalMoves(state.board, humanIsWhite())
     .filter((m) => m.startsWith(from))
     .map((m) => m.slice(2, 4));
 }
 
 function onSquareClick(name) {
   if (!canHumanMove()) return;
+  const mine = humanIsWhite();
   if (!selected) {
     const ch = state.board[E.squareToIndex(name)];
-    if (!ch || ch === "#" || !E.isWhitePiece(ch)) return;
+    if (!ch || ch === "#" || E.isWhitePiece(ch) !== mine) return;
     selected = name;
     targets = loadTargets(name);
     renderBoard(true);
@@ -530,7 +742,7 @@ function onSquareClick(name) {
   }
   if (!targets.includes(name)) {
     const ch = state.board[E.squareToIndex(name)];
-    if (ch && ch !== "#" && E.isWhitePiece(ch)) {
+    if (ch && ch !== "#" && E.isWhitePiece(ch) === mine) {
       selected = name;
       targets = loadTargets(name);
       renderBoard(true);
@@ -548,6 +760,10 @@ function onSquareClick(name) {
 }
 
 function sendMove(move) {
+  if (gameMode === "puzzle") {
+    sendPuzzleMove(move);
+    return;
+  }
   if (busy || !canHumanMove()) return;
   const legal = E.legalMoves(state.board, true);
   if (!legal.includes(move)) {
@@ -641,8 +857,11 @@ function setLevel(level) {
 function askHint() {
   if (!canHumanMove()) return;
 
+  const hintMove =
+    gameMode === "puzzle" ? getPuzzleSolutionMove() : state.hintStep < 1 || !pendingHint ? E.bestMove(state.board, humanIsWhite()) : pendingHint;
+
   if (state.hintStep < 1 || !pendingHint) {
-    const move = E.bestMove(state.board, true);
+    const move = hintMove;
     if (!move) {
       state.coach = speak("idle", { text: "No good hint right now." });
       renderBoard(true);
@@ -677,6 +896,11 @@ function askHint() {
 }
 
 function undoMove() {
+  if (gameMode === "puzzle") {
+    if (!currentPuzzle || state.thinking) return;
+    resetPuzzlePosition();
+    return;
+  }
   if (!snapshots.length || state.thinking) return;
   const snap = snapshots.pop();
   // undo both player and bot if last was bot reply pair
@@ -755,7 +979,16 @@ document.body.addEventListener(
   { once: true }
 );
 
-newGameBtn.addEventListener("click", startPractice);
+newGameBtn.addEventListener("click", () => {
+  if (gameMode === "puzzle") {
+    loadPuzzle(puzzleIndex + 1);
+    return;
+  }
+  startPractice();
+});
+if (modeCoachBtn) modeCoachBtn.addEventListener("click", enterCoachMode);
+if (modePuzzleBtn) modePuzzleBtn.addEventListener("click", enterPuzzleMode);
+if (homeBtn) homeBtn.addEventListener("click", showHomeScreen);
 hintBtn.addEventListener("click", askHint);
 undoBtn.addEventListener("click", undoMove);
 ideaBtn.addEventListener("click", showIdea);
@@ -792,7 +1025,7 @@ if (installBtn) {
 try {
   applyCoachUI();
   renderCoachPicker();
-  startPractice();
+  showHomeScreen();
 } catch (err) {
   document.body.insertAdjacentHTML(
     "afterbegin",

@@ -46,13 +46,109 @@ body {
 body {
   height: 100dvh;
   max-height: 100dvh;
+  overflow: hidden;
+  padding: env(safe-area-inset-top) 0 env(safe-area-inset-bottom);
+}
+
+body.mode-home {
+  display: block;
+  overflow: auto;
+}
+
+body:not(.mode-home) {
   display: grid;
   grid-template-rows: auto minmax(0, 1fr) auto;
-  padding: env(safe-area-inset-top) 0 env(safe-area-inset-bottom);
+}
+
+.game-root.hidden {
+  display: none !important;
 }
 
 .hidden {
   display: none !important;
+}
+
+/* ── Home screen ── */
+.home-screen {
+  min-height: 100dvh;
+  display: grid;
+  place-items: center;
+  padding: 24px 16px 32px;
+  background: radial-gradient(ellipse at 50% 0%, #3a3830 0%, var(--cc-bg) 55%);
+}
+
+.home-inner {
+  width: min(100%, 420px);
+  display: grid;
+  gap: 20px;
+  text-align: center;
+}
+
+.home-title {
+  margin: 0;
+  font-size: clamp(28px, 8vw, 36px);
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+
+.home-sub {
+  margin: -8px 0 0;
+  color: var(--cc-text-muted);
+  font-size: 15px;
+}
+
+.mode-cards {
+  display: grid;
+  gap: 12px;
+  margin-top: 8px;
+}
+
+.mode-card {
+  border: 2px solid var(--cc-border);
+  background: var(--cc-bg-deep);
+  color: var(--cc-text);
+  border-radius: var(--cc-radius-lg);
+  padding: 18px 16px;
+  text-align: left;
+  cursor: pointer;
+  display: grid;
+  gap: 6px;
+  transition: border-color 0.15s ease, transform 0.15s ease;
+}
+
+.mode-card:hover,
+.mode-card:focus-visible {
+  border-color: var(--cc-brand);
+  transform: translateY(-2px);
+  outline: none;
+}
+
+.mode-card-accent {
+  background: linear-gradient(145deg, rgba(129, 182, 76, 0.12), var(--cc-bg-deep));
+}
+
+.mode-icon {
+  font-size: 28px;
+  line-height: 1;
+}
+
+.mode-card strong {
+  font-size: 18px;
+}
+
+.mode-desc {
+  font-size: 13px;
+  line-height: 1.4;
+  color: var(--cc-text-muted);
+}
+
+.puzzle-meta {
+  color: var(--cc-gold);
+  font-size: 12px;
+}
+
+body.mode-puzzle .eval-col {
+  opacity: 0.35;
 }
 
 /* ── Play Coach panel (Chess.com style) ── */
