@@ -19,17 +19,26 @@
       });
     }
   </script>
-  <link rel="stylesheet" href="style.css?v=8" />
+  <link rel="stylesheet" href="style.css?v=14" />
   <meta name="theme-color" content="#312e2b" />
 </head>
 <body>
-  <header class="coach-bar">
-    <div class="magnus" aria-hidden="true"></div>
-    <div class="coach-copy">
-      <div class="coach-row">
-        <strong class="brand">Magnus Carlsen</strong>
+  <header class="coach-panel">
+    <div class="coach-top">
+      <div id="magnusAvatar" class="magnus-avatar">
+        <img id="coachAvatar" class="magnus-photo" src="magnus.svg" alt="Magnus Carlsen AI Coach" />
+        <span class="ai-tag">AI</span>
+      </div>
+      <div class="coach-identity">
+        <div class="coach-row">
+          <strong id="coachBrand" class="brand">Magnus Carlsen</strong>
+          <span class="play-coach-label">Play Coach</span>
+        </div>
         <span id="coachTitle" class="badge idle">Coach</span>
       </div>
+      <button id="voiceBtn" type="button" class="voice-toggle" aria-label="Mute coach voice">🔊</button>
+    </div>
+    <div class="coach-speech">
       <p id="coachText">Alright. Let's play.</p>
       <p id="tipText" class="tip-line"></p>
     </div>
@@ -48,7 +57,7 @@
         <div class="player-info">
           <div class="avatar-wrap"><span class="avatar black"></span></div>
           <div class="player-meta">
-            <span class="player-name">Coach</span>
+            <span id="oppName" class="player-name">Coach</span>
             <span id="oppRating" class="player-rating">1000</span>
           </div>
         </div>
@@ -98,6 +107,9 @@
   <div id="settings" class="sheet hidden">
     <div class="sheet-card">
       <h3>Settings</h3>
+      <p class="settings-label">Choose your coach</p>
+      <div id="coachPicker" class="coach-picker"></div>
+      <label><input id="optVoice" type="checkbox" checked /> Coach voice (speaks aloud)</label>
       <label><input id="optSuggest" type="checkbox" /> Suggestion arrows (Hint / Idea only)</label>
       <label><input id="optThreat" type="checkbox" checked /> Threat arrows</label>
       <label><input id="optEval" type="checkbox" checked /> Evaluation bar</label>
@@ -110,15 +122,23 @@
       var base = location.pathname.indexOf("/chess-play-coach") === 0
         ? "/chess-play-coach/"
         : "./";
+      var v = document.createElement("script");
+      v.src = base + "voice.js?v=14";
+      v.onload = function () {
+        document.body.appendChild(s);
+      };
+      v.onerror = function () {
+        document.body.appendChild(s);
+      };
+      document.body.appendChild(v);
       var s = document.createElement("script");
-      s.src = base + "game.js?v=8";
+      s.src = base + "game.js?v=14";
       s.onerror = function () {
         document.body.insertAdjacentHTML(
           "afterbegin",
           '<p style="padding:12px;background:#fa412d;color:#fff">Could not load game.js</p>'
         );
       };
-      document.body.appendChild(s);
     })();
   </script>
 </body>

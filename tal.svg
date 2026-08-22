@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" role="img" aria-label="Mikhail Tal">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#4a4038"/>
+      <stop offset="100%" stop-color="#2a2520"/>
+    </linearGradient>
+    <radialGradient id="face" cx="50%" cy="42%" r="38%">
+      <stop offset="0%" stop-color="#f0d4b8"/>
+      <stop offset="100%" stop-color="#d4a880"/>
+    </radialGradient>
+  </defs>
+  <rect width="200" height="200" fill="url(#bg)"/>
+  <ellipse cx="100" cy="118" rx="58" ry="64" fill="#2b231c"/>
+  <circle cx="100" cy="88" r="46" fill="url(#face)"/>
+  <ellipse cx="100" cy="52" rx="46" ry="24" fill="#5a4030"/>
+  <circle cx="84" cy="86" r="4" fill="#2b231c"/>
+  <circle cx="116" cy="86" r="4" fill="#2b231c"/>
+  <path d="M84 104 Q100 116 116 104" fill="none" stroke="#9a6848" stroke-width="3" stroke-linecap="round"/>
+</svg>

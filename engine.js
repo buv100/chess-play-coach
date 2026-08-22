@@ -382,19 +382,56 @@ function bestMove(board, whiteTurn) {
   return found ? found.move : null;
 }
 
-function analyzeMove(board, whiteTurn, move, histLen) {
-  const found = searchBest(board, whiteTurn, 1, Date.now() + 50);
+function sideMaterial(arr, forWhite) {
+  let total = 0;
+  for (let i = 0; i < 64; i++) {
+    const ch = arr[i];
+    if (isEmpty(ch)) continue;
+    const v = PIECE_VALUE[kind(ch)] || 0;
+    total += isWhitePiece(ch) === forWhite ? v : -v;
+  }
+  return forWhite ? total : -total;
+}
+
+const MOVE_SYMBOLS = {
+  brilliant: "!!",
+  best: "!",
+  excellent: "✓",
+  good: "✓",
+  book: "♗",
+  inaccuracy: "?!",
+  mistake: "?",
+  blunder: "??",
+};
+
+const MOVE_TITLES = {
+  brilliant: "Brilliant",
+  best: "Best move",
+  excellent: "Excellent",
+  good: "Good move",
+  book: "Book move",
+  inaccuracy: "Inaccuracy",
+  mistake: "Mistake",
+  blunder: "Blunder",
+};
+
+function analyzeMove(board, whiteTurn, move, histLen, options) {
+  options = options || {};
+  const found = searchBest(board, whiteTurn, 2, Date.now() + 110);
   if (!found) {
-    return { kind: "good", idea: "", best: null, why: "", impact: "" };
+    return { kind: "good", idea: "", best: null, why: "", impact: "", symbol: MOVE_SYMBOLS.good };
   }
 
   const arr = cloneBoard(board);
   const src = squareToIndex(move.slice(0, 2));
   const dst = squareToIndex(move.slice(2, 4));
   const before = evaluate(arr);
+  const matBefore = sideMaterial(arr, whiteTurn);
   makeMove(arr, src, dst);
   const after = evaluate(arr);
+  const matAfter = sideMaterial(arr, whiteTurn);
   const playedDelta = whiteTurn ? after - before : before - after;
+  const materialGiven = matBefore - matAfter;
 
   let bestDelta = playedDelta;
   if (found.move && found.move !== move) {
@@ -409,24 +446,37 @@ function analyzeMove(board, whiteTurn, move, histLen) {
 
   const loss = bestDelta - playedDelta;
   const idea = `${found.move.slice(0, 2)} → ${found.move.slice(2, 4)}`;
+  const isBook = histLen < 14 && loss <= 45;
+  const isSacrifice = materialGiven >= 90 && loss <= 35;
+  const onlyMove = legalMoves(cloneBoard(board), whiteTurn).length <= 2;
 
   let kind;
-  if (move === found.move || loss <= 20) {
-    kind = "best";
-  } else if (loss <= 50) {
-    kind = histLen < 10 ? "book" : "excellent";
-  } else if (loss <= 100) {
+  if (isSacrifice && (move === found.move || loss <= 25)) {
+    kind = "brilliant";
+  } else if (move === found.move || loss <= 15) {
+    kind = onlyMove && loss <= 5 ? "excellent" : "best";
+  } else if (loss <= 45) {
+    kind = isBook ? "book" : "excellent";
+  } else if (loss <= 95) {
     kind = "good";
-  } else if (loss <= 180) {
+  } else if (loss <= 170) {
     kind = "inaccuracy";
-  } else if (loss <= 320) {
+  } else if (loss <= 300) {
     kind = "mistake";
   } else {
     kind = "blunder";
   }
 
-  const explained = explainMove(board, whiteTurn, move, kind, found.move, histLen, loss);
-  return { kind, idea, best: found.move, why: explained.why, impact: explained.impact };
+  const explained = explainMove(board, whiteTurn, move, kind, found.move, histLen, loss, options);
+  return {
+    kind,
+    idea,
+    best: found.move,
+    why: explained.why,
+    impact: explained.impact,
+    symbol: MOVE_SYMBOLS[kind] || "",
+    loss: Math.round(loss),
+  };
 }
 
 const PIECE_NAMES = {
@@ -442,7 +492,12 @@ function pieceLabel(ch) {
   return PIECE_NAMES[kind(ch)] || "piece";
 }
 
-function explainMove(board, whiteTurn, move, ratingKind, bestMove, histLen, loss) {
+function explainMove(board, whiteTurn, move, ratingKind, bestMove, histLen, loss, options) {
+  options = options || {};
+  const forCoach = !!options.forCoach;
+  const subj = forCoach ? "I" : "You";
+  const poss = forCoach ? "my" : "your";
+  const opp = forCoach ? "you" : "the opponent";
   const arr = cloneBoard(board);
   const src = squareToIndex(move.slice(0, 2));
   const dst = squareToIndex(move.slice(2, 4));
@@ -455,7 +510,7 @@ function explainMove(board, whiteTurn, move, ratingKind, bestMove, histLen, loss
   const positive = ["best", "excellent", "good", "book", "brilliant"].includes(ratingKind);
 
   if (!isEmpty(captured)) {
-    reasons.push(`You win the ${pieceLabel(captured)} on ${toSq}.`);
+    reasons.push(`${subj} win the ${pieceLabel(captured)} on ${toSq}.`);
     impacts.push("Material up usually means a safer endgame and more attacking options.");
   }
 
@@ -463,7 +518,7 @@ function explainMove(board, whiteTurn, move, ratingKind, bestMove, histLen, loss
   const oppWhite = !whiteTurn;
 
   if (inCheck(arr, oppWhite)) {
-    reasons.push("Check — the opponent must deal with it first.");
+    reasons.push("Check — " + (forCoach ? "you must deal with it first." : "the opponent must deal with it first."));
     impacts.push("Forcing moves steal time: they can't improve while in check.");
   }
 
@@ -477,8 +532,8 @@ function explainMove(board, whiteTurn, move, ratingKind, bestMove, histLen, loss
 
   const centerSq = ["d4", "e4", "d5", "e5", "c4", "f4", "c5", "f5"];
   if (pk === "p" && centerSq.includes(toSq) && histLen < 18) {
-    reasons.push("You claim central space.");
-    impacts.push("The center opens lines for your rooks and queen in the middlegame.");
+    reasons.push(`${subj} claim central space.`);
+    impacts.push("The center opens lines for " + poss + " rooks and queen in the middlegame.");
   }
 
   if (pk === "r" || pk === "q") {
@@ -492,7 +547,7 @@ function explainMove(board, whiteTurn, move, ratingKind, bestMove, histLen, loss
       }
     }
     if (!pawnOnFile && histLen > 10) {
-      reasons.push(`Your ${pieceLabel(piece)} moves to an open file.`);
+      reasons.push(`${forCoach ? "My" : "Your"} ${pieceLabel(piece)} moves to an open file.`);
       impacts.push("Rooks and queens are strongest on open files — they can penetrate.");
     }
   }
@@ -500,12 +555,20 @@ function explainMove(board, whiteTurn, move, ratingKind, bestMove, histLen, loss
   const hanging = findThreats(boardString(arr), whiteTurn);
   if (hanging.length && !positive) {
     reasons.push(`Something on ${hanging[0].to} is left attacked.`);
-    impacts.push("If they take it, you lose material and the initiative.");
+    impacts.push(
+      forCoach
+        ? "If you take it, I lose material and the initiative."
+        : "If they take it, you lose material and the initiative."
+    );
   }
 
   const oppThreats = findThreats(boardString(arr), oppWhite);
   if (oppThreats.length && positive && !isEmpty(captured)) {
-    impacts.push("Even after winning material, watch their threats on the next move.");
+    impacts.push(
+      forCoach
+        ? "Even after winning material, watch your threats on the next move."
+        : "Even after winning material, watch their threats on the next move."
+    );
   }
 
   if (!positive && bestMove && bestMove !== move) {
@@ -514,23 +577,39 @@ function explainMove(board, whiteTurn, move, ratingKind, bestMove, histLen, loss
     const bs = squareToIndex(bestMove.slice(0, 2));
     const bestCap = !isEmpty(probe[bd]);
     if (bestCap && isEmpty(captured)) {
-      reasons.push(`You missed ${bestMove.slice(0, 2)}→${bestMove.slice(2, 4)} — a free ${pieceLabel(probe[bd])}.`);
+      reasons.push(
+        forCoach
+          ? `I missed ${bestMove.slice(0, 2)}→${bestMove.slice(2, 4)} — a free ${pieceLabel(probe[bd])}.`
+          : `You missed ${bestMove.slice(0, 2)}→${bestMove.slice(2, 4)} — a free ${pieceLabel(probe[bd])}.`
+      );
     } else if (loss > 100) {
       reasons.push(`Stronger was ${bestMove.slice(0, 2)}→${bestMove.slice(2, 4)}.`);
     }
   }
 
+  if (ratingKind === "brilliant") {
+    impacts.unshift("A sacrifice that works — the engine loves it.");
+  }
+
   if (positive) {
     if (!reasons.length) {
-      reasons.push("Solid — your pieces stay coordinated and the king stays safe.");
+      reasons.push(
+        forCoach
+          ? "Solid — my pieces stay coordinated and the king stays safe."
+          : "Solid — your pieces stay coordinated and the king stays safe."
+      );
     }
     if (!impacts.length) {
       if (histLen < 16) {
-        impacts.push("Keep developing — you'll be ready to castle and fight for the center.");
+        impacts.push(
+          forCoach
+            ? "Keep developing — I'll be ready to castle and fight for the center."
+            : "Keep developing — you'll be ready to castle and fight for the center."
+        );
       } else if (histLen < 36) {
         impacts.push("Look next for tactics: forks, pins, and weak pawns to target.");
       } else {
-        impacts.push("In the endgame, activate your king and push passed pawns.");
+        impacts.push("In the endgame, activate the king and push passed pawns.");
       }
     }
   } else if (ratingKind === "inaccuracy") {
@@ -539,11 +618,19 @@ function explainMove(board, whiteTurn, move, ratingKind, bestMove, histLen, loss
     }
   } else if (ratingKind === "mistake") {
     if (!impacts.length) {
-      impacts.push("The opponent can seize the initiative — check their threats before you move again.");
+      impacts.push(
+        forCoach
+          ? "You can seize the initiative — check my threats before I move again."
+          : "The opponent can seize the initiative — check their threats before you move again."
+      );
     }
   } else if (ratingKind === "blunder") {
     if (!impacts.length) {
-      impacts.push("One blunder can decide the game — undo or find a defense immediately.");
+      impacts.push(
+        forCoach
+          ? "One blunder can decide the game — you can punish this."
+          : "One blunder can decide the game — undo or find a defense immediately."
+      );
     }
   }
 
@@ -666,6 +753,8 @@ const ChessEngine = {
   indexToSquare,
   isWhitePiece,
   LEVELS,
+  MOVE_SYMBOLS,
+  MOVE_TITLES,
 };
 
 if (typeof module !== "undefined" && module.exports) {

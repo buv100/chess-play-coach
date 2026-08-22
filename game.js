@@ -1,4 +1,4 @@
-"use strict";
+﻿"use strict";
 
 const PIECE_VALUE = {
   p: 100,
@@ -382,19 +382,56 @@ function bestMove(board, whiteTurn) {
   return found ? found.move : null;
 }
 
-function analyzeMove(board, whiteTurn, move, histLen) {
-  const found = searchBest(board, whiteTurn, 1, Date.now() + 50);
+function sideMaterial(arr, forWhite) {
+  let total = 0;
+  for (let i = 0; i < 64; i++) {
+    const ch = arr[i];
+    if (isEmpty(ch)) continue;
+    const v = PIECE_VALUE[kind(ch)] || 0;
+    total += isWhitePiece(ch) === forWhite ? v : -v;
+  }
+  return forWhite ? total : -total;
+}
+
+const MOVE_SYMBOLS = {
+  brilliant: "!!",
+  best: "!",
+  excellent: "âœ“",
+  good: "âœ“",
+  book: "â™—",
+  inaccuracy: "?!",
+  mistake: "?",
+  blunder: "??",
+};
+
+const MOVE_TITLES = {
+  brilliant: "Brilliant",
+  best: "Best move",
+  excellent: "Excellent",
+  good: "Good move",
+  book: "Book move",
+  inaccuracy: "Inaccuracy",
+  mistake: "Mistake",
+  blunder: "Blunder",
+};
+
+function analyzeMove(board, whiteTurn, move, histLen, options) {
+  options = options || {};
+  const found = searchBest(board, whiteTurn, 2, Date.now() + 110);
   if (!found) {
-    return { kind: "good", idea: "", best: null, why: "", impact: "" };
+    return { kind: "good", idea: "", best: null, why: "", impact: "", symbol: MOVE_SYMBOLS.good };
   }
 
   const arr = cloneBoard(board);
   const src = squareToIndex(move.slice(0, 2));
   const dst = squareToIndex(move.slice(2, 4));
   const before = evaluate(arr);
+  const matBefore = sideMaterial(arr, whiteTurn);
   makeMove(arr, src, dst);
   const after = evaluate(arr);
+  const matAfter = sideMaterial(arr, whiteTurn);
   const playedDelta = whiteTurn ? after - before : before - after;
+  const materialGiven = matBefore - matAfter;
 
   let bestDelta = playedDelta;
   if (found.move && found.move !== move) {
@@ -408,25 +445,38 @@ function analyzeMove(board, whiteTurn, move, histLen) {
   }
 
   const loss = bestDelta - playedDelta;
-  const idea = `${found.move.slice(0, 2)} → ${found.move.slice(2, 4)}`;
+  const idea = `${found.move.slice(0, 2)} â†’ ${found.move.slice(2, 4)}`;
+  const isBook = histLen < 14 && loss <= 45;
+  const isSacrifice = materialGiven >= 90 && loss <= 35;
+  const onlyMove = legalMoves(cloneBoard(board), whiteTurn).length <= 2;
 
   let kind;
-  if (move === found.move || loss <= 20) {
-    kind = "best";
-  } else if (loss <= 50) {
-    kind = histLen < 10 ? "book" : "excellent";
-  } else if (loss <= 100) {
+  if (isSacrifice && (move === found.move || loss <= 25)) {
+    kind = "brilliant";
+  } else if (move === found.move || loss <= 15) {
+    kind = onlyMove && loss <= 5 ? "excellent" : "best";
+  } else if (loss <= 45) {
+    kind = isBook ? "book" : "excellent";
+  } else if (loss <= 95) {
     kind = "good";
-  } else if (loss <= 180) {
+  } else if (loss <= 170) {
     kind = "inaccuracy";
-  } else if (loss <= 320) {
+  } else if (loss <= 300) {
     kind = "mistake";
   } else {
     kind = "blunder";
   }
 
-  const explained = explainMove(board, whiteTurn, move, kind, found.move, histLen, loss);
-  return { kind, idea, best: found.move, why: explained.why, impact: explained.impact };
+  const explained = explainMove(board, whiteTurn, move, kind, found.move, histLen, loss, options);
+  return {
+    kind,
+    idea,
+    best: found.move,
+    why: explained.why,
+    impact: explained.impact,
+    symbol: MOVE_SYMBOLS[kind] || "",
+    loss: Math.round(loss),
+  };
 }
 
 const PIECE_NAMES = {
@@ -442,7 +492,12 @@ function pieceLabel(ch) {
   return PIECE_NAMES[kind(ch)] || "piece";
 }
 
-function explainMove(board, whiteTurn, move, ratingKind, bestMove, histLen, loss) {
+function explainMove(board, whiteTurn, move, ratingKind, bestMove, histLen, loss, options) {
+  options = options || {};
+  const forCoach = !!options.forCoach;
+  const subj = forCoach ? "I" : "You";
+  const poss = forCoach ? "my" : "your";
+  const opp = forCoach ? "you" : "the opponent";
   const arr = cloneBoard(board);
   const src = squareToIndex(move.slice(0, 2));
   const dst = squareToIndex(move.slice(2, 4));
@@ -455,7 +510,7 @@ function explainMove(board, whiteTurn, move, ratingKind, bestMove, histLen, loss
   const positive = ["best", "excellent", "good", "book", "brilliant"].includes(ratingKind);
 
   if (!isEmpty(captured)) {
-    reasons.push(`You win the ${pieceLabel(captured)} on ${toSq}.`);
+    reasons.push(`${subj} win the ${pieceLabel(captured)} on ${toSq}.`);
     impacts.push("Material up usually means a safer endgame and more attacking options.");
   }
 
@@ -463,7 +518,7 @@ function explainMove(board, whiteTurn, move, ratingKind, bestMove, histLen, loss
   const oppWhite = !whiteTurn;
 
   if (inCheck(arr, oppWhite)) {
-    reasons.push("Check — the opponent must deal with it first.");
+    reasons.push("Check â€” " + (forCoach ? "you must deal with it first." : "the opponent must deal with it first."));
     impacts.push("Forcing moves steal time: they can't improve while in check.");
   }
 
@@ -477,8 +532,8 @@ function explainMove(board, whiteTurn, move, ratingKind, bestMove, histLen, loss
 
   const centerSq = ["d4", "e4", "d5", "e5", "c4", "f4", "c5", "f5"];
   if (pk === "p" && centerSq.includes(toSq) && histLen < 18) {
-    reasons.push("You claim central space.");
-    impacts.push("The center opens lines for your rooks and queen in the middlegame.");
+    reasons.push(`${subj} claim central space.`);
+    impacts.push("The center opens lines for " + poss + " rooks and queen in the middlegame.");
   }
 
   if (pk === "r" || pk === "q") {
@@ -492,20 +547,28 @@ function explainMove(board, whiteTurn, move, ratingKind, bestMove, histLen, loss
       }
     }
     if (!pawnOnFile && histLen > 10) {
-      reasons.push(`Your ${pieceLabel(piece)} moves to an open file.`);
-      impacts.push("Rooks and queens are strongest on open files — they can penetrate.");
+      reasons.push(`${forCoach ? "My" : "Your"} ${pieceLabel(piece)} moves to an open file.`);
+      impacts.push("Rooks and queens are strongest on open files â€” they can penetrate.");
     }
   }
 
   const hanging = findThreats(boardString(arr), whiteTurn);
   if (hanging.length && !positive) {
     reasons.push(`Something on ${hanging[0].to} is left attacked.`);
-    impacts.push("If they take it, you lose material and the initiative.");
+    impacts.push(
+      forCoach
+        ? "If you take it, I lose material and the initiative."
+        : "If they take it, you lose material and the initiative."
+    );
   }
 
   const oppThreats = findThreats(boardString(arr), oppWhite);
   if (oppThreats.length && positive && !isEmpty(captured)) {
-    impacts.push("Even after winning material, watch their threats on the next move.");
+    impacts.push(
+      forCoach
+        ? "Even after winning material, watch your threats on the next move."
+        : "Even after winning material, watch their threats on the next move."
+    );
   }
 
   if (!positive && bestMove && bestMove !== move) {
@@ -514,36 +577,60 @@ function explainMove(board, whiteTurn, move, ratingKind, bestMove, histLen, loss
     const bs = squareToIndex(bestMove.slice(0, 2));
     const bestCap = !isEmpty(probe[bd]);
     if (bestCap && isEmpty(captured)) {
-      reasons.push(`You missed ${bestMove.slice(0, 2)}→${bestMove.slice(2, 4)} — a free ${pieceLabel(probe[bd])}.`);
+      reasons.push(
+        forCoach
+          ? `I missed ${bestMove.slice(0, 2)}â†’${bestMove.slice(2, 4)} â€” a free ${pieceLabel(probe[bd])}.`
+          : `You missed ${bestMove.slice(0, 2)}â†’${bestMove.slice(2, 4)} â€” a free ${pieceLabel(probe[bd])}.`
+      );
     } else if (loss > 100) {
-      reasons.push(`Stronger was ${bestMove.slice(0, 2)}→${bestMove.slice(2, 4)}.`);
+      reasons.push(`Stronger was ${bestMove.slice(0, 2)}â†’${bestMove.slice(2, 4)}.`);
     }
+  }
+
+  if (ratingKind === "brilliant") {
+    impacts.unshift("A sacrifice that works â€” the engine loves it.");
   }
 
   if (positive) {
     if (!reasons.length) {
-      reasons.push("Solid — your pieces stay coordinated and the king stays safe.");
+      reasons.push(
+        forCoach
+          ? "Solid â€” my pieces stay coordinated and the king stays safe."
+          : "Solid â€” your pieces stay coordinated and the king stays safe."
+      );
     }
     if (!impacts.length) {
       if (histLen < 16) {
-        impacts.push("Keep developing — you'll be ready to castle and fight for the center.");
+        impacts.push(
+          forCoach
+            ? "Keep developing â€” I'll be ready to castle and fight for the center."
+            : "Keep developing â€” you'll be ready to castle and fight for the center."
+        );
       } else if (histLen < 36) {
         impacts.push("Look next for tactics: forks, pins, and weak pawns to target.");
       } else {
-        impacts.push("In the endgame, activate your king and push passed pawns.");
+        impacts.push("In the endgame, activate the king and push passed pawns.");
       }
     }
   } else if (ratingKind === "inaccuracy") {
     if (!impacts.length) {
-      impacts.push("Small errors add up — sharper play keeps more options open.");
+      impacts.push("Small errors add up â€” sharper play keeps more options open.");
     }
   } else if (ratingKind === "mistake") {
     if (!impacts.length) {
-      impacts.push("The opponent can seize the initiative — check their threats before you move again.");
+      impacts.push(
+        forCoach
+          ? "You can seize the initiative â€” check my threats before I move again."
+          : "The opponent can seize the initiative â€” check their threats before you move again."
+      );
     }
   } else if (ratingKind === "blunder") {
     if (!impacts.length) {
-      impacts.push("One blunder can decide the game — undo or find a defense immediately.");
+      impacts.push(
+        forCoach
+          ? "One blunder can decide the game â€” you can punish this."
+          : "One blunder can decide the game â€” undo or find a defense immediately."
+      );
     }
   }
 
@@ -587,11 +674,11 @@ function quickTip(board, whiteToMove, histLen) {
     return "Open with e4/d4, then bring knights out before the queen.";
   }
   if (inCheck(arr, whiteToMove)) {
-    return "You're in check — escape, block, or capture the attacker.";
+    return "You're in check â€” escape, block, or capture the attacker.";
   }
   const threats = findThreats(board, whiteToMove);
   if (threats.length) {
-    return `Threat on ${threats[0].to} — defend it, move it, or counterattack.`;
+    return `Threat on ${threats[0].to} â€” defend it, move it, or counterattack.`;
   }
   const undeveloped = [];
   const back = whiteToMove ? 7 : 0;
@@ -605,7 +692,7 @@ function quickTip(board, whiteToMove, histLen) {
     }
   }
   if (undeveloped.length && histLen < 20) {
-    return `Develop your ${undeveloped[0]} — idle pieces lose games.`;
+    return `Develop your ${undeveloped[0]} â€” idle pieces lose games.`;
   }
   const center = ["d4", "e4", "d5", "e5"];
   let ownCenter = 0;
@@ -616,16 +703,16 @@ function quickTip(board, whiteToMove, histLen) {
     }
   }
   if (ownCenter === 0 && histLen < 16) {
-    return "Claim the center — pawns and pieces love d4/e4.";
+    return "Claim the center â€” pawns and pieces love d4/e4.";
   }
   if (histLen >= 20 && histLen < 40) {
-    return "Middlegame: create a plan — attack a weak pawn or open a file.";
+    return "Middlegame: create a plan â€” attack a weak pawn or open a file.";
   }
   if (histLen >= 40) {
     return "Endgame tip: activate the king and push passed pawns.";
   }
   const tips = [
-    "Before you move: checks, captures, threats — in that order.",
+    "Before you move: checks, captures, threats â€” in that order.",
     "If nothing tactical, improve your worst-placed piece.",
     "Don't move the same piece twice in the opening unless forced.",
     "Trade when ahead in material; avoid trades when behind.",
@@ -666,6 +753,8 @@ const ChessEngine = {
   indexToSquare,
   isWhitePiece,
   LEVELS,
+  MOVE_SYMBOLS,
+  MOVE_TITLES,
 };
 
 if (typeof module !== "undefined" && module.exports) {
@@ -673,79 +762,424 @@ if (typeof module !== "undefined" && module.exports) {
 } else {
   window.ChessEngine = ChessEngine;
 }
-
-
 "use strict";
 
 function pick(list) {
   return list[Math.floor(Math.random() * list.length)];
 }
 
-function withTip(text, tip) {
-  if (!tip || tip === text) {
-    return text;
-  }
-  return `${text} Tip: ${tip}`;
+const SHOUT_KINDS = ["brilliant", "blunder", "mistake", "inaccuracy"];
+
+const COACH_SHOUTS = {
+  magnus: {
+    brilliant: ["Wow!", "Yes!", "Incredible!"],
+    blunder: ["No!", "Oh no!", "What?!"],
+    mistake: ["Ouch!", "Hmm!"],
+    inaccuracy: ["Hmm!"],
+  },
+  kasparov: {
+    brilliant: ["YES!", "Attack!", "Fire!"],
+    blunder: ["NO!", "Disaster!", "How?!"],
+    mistake: ["Weak!", "No no!"],
+    inaccuracy: ["Too soft!"],
+  },
+  tal: {
+    brilliant: ["WOW!", "Magic!", "Beautiful!"],
+    blunder: ["Oh!", "Oops!", "Ha!"],
+    mistake: ["Hmm!", "Wild!"],
+    inaccuracy: ["Not spicy enough!"],
+  },
+  fischer: {
+    brilliant: ["Perfect!", "Yes!"],
+    blunder: ["NO!", "Unacceptable!", "Terrible!"],
+    mistake: ["Wrong!", "No!"],
+    inaccuracy: ["Sloppy!"],
+  },
+  capablanca: {
+    brilliant: ["Lovely!", "Elegant!"],
+    blunder: ["Oh dear!", "No!"],
+    mistake: ["Careless!"],
+    inaccuracy: ["Hmm."],
+  },
+  karpov: {
+    brilliant: ["Precise!", "Strong!"],
+    blunder: ["No!", "Loose!"],
+    mistake: ["Slip!"],
+    inaccuracy: ["Soft."],
+  },
+};
+
+function pickShout(coachId, kindKey) {
+  if (!SHOUT_KINDS.includes(kindKey)) return null;
+  const coachShouts = COACH_SHOUTS[coachId] || COACH_SHOUTS.magnus;
+  const list = coachShouts[kindKey];
+  return list && list.length ? pick(list) : null;
 }
 
-function magnusSpeak(kind, extra) {
+const POSITIVE = ["best", "excellent", "good", "book", "brilliant"];
+
+function styleReframe(coach, why, impact, kind) {
+  const w = (why || "").toLowerCase();
+  const positive = POSITIVE.includes(kind);
+  const rf = coach.reframe || {};
+  let outWhy = why || "";
+  let outImpact = impact || "";
+
+  if (positive && rf.good) {
+    if (w.includes("capture") || w.includes("win the")) outImpact = rf.good.capture || outImpact;
+    else if (w.includes("check")) outImpact = rf.good.check || outImpact;
+    else if (w.includes("develop")) outImpact = rf.good.develop || outImpact;
+    else if (w.includes("center")) outImpact = rf.good.center || outImpact;
+    else if (w.includes("open file")) outImpact = rf.good.openFile || outImpact;
+    else outImpact = rf.good.default || outImpact;
+  } else if (kind === "inaccuracy" && rf.inaccuracy) {
+    outImpact = rf.inaccuracy;
+  } else if (kind === "mistake" && rf.mistake) {
+    outImpact = rf.mistake;
+  } else if (kind === "blunder" && rf.blunder) {
+    outImpact = rf.blunder;
+  }
+
+  if (rf.prefix && outWhy) outWhy = `${rf.prefix} ${outWhy}`;
+  if (rf.suffix && outImpact) outImpact = `${outImpact} ${rf.suffix}`;
+  else if (rf.suffix && !outImpact) outImpact = rf.suffix;
+
+  return { why: outWhy.trim(), impact: outImpact.trim() };
+}
+
+const COACHES = {
+  magnus: {
+    id: "magnus",
+    name: "Magnus Carlsen",
+    tagline: "Practical chess",
+    avatar: "magnus.svg",
+    voice: { rate: 0.86, pitch: 1.02, volume: 0.92 },
+    reframe: {
+      prefix: "In my style â€”",
+      suffix: "I simplify and squeeze â€” no need to force anything.",
+      good: {
+        default: "Solid and practical. Small edges are how I win long games.",
+        capture: "Clean material gain. I trade chaos for a clearer endgame.",
+        develop: "Natural development â€” I never rush when the position doesn't need it.",
+        center: "Central control quietly limits their options. That's my kind of edge.",
+        check: "Forcing moves are fine, but follow up with purpose, not fireworks.",
+        openFile: "Open files are for rooks â€” activate them and keep the pressure steady.",
+      },
+      inaccuracy: "Small slip. I would tighten up before the edge disappears.",
+      mistake: "That drifts from my style â€” I cut losses and find the safest active plan.",
+      blunder: "Too loose. I always ask: what can they take next?",
+    },
+    lines: {
+      start: [
+        "Alright. Let's play my way â€” develop, take space, and don't hang pieces.",
+        "I keep it simple. Practical moves beat pretty ones.",
+        "Let's go. I'll show you how I grind positions without forcing anything.",
+      ],
+      best: ["Yeah. That's the move.", "Clean. Exactly what I'd play.", "Correct â€” no drama needed."],
+      excellent: ["Excellent. Very strong.", "Sharp and practical."],
+      good: ["Good move. Solid.", "Fine â€” keeps the position playable.", "I like this. Low risk."],
+      book: ["Book. Theory is theory for a reason.", "Known territory â€” stay on track."],
+      inaccuracy: ["A bit loose. There was something tighter.", "Playable, but not my precision."],
+      mistake: ["Mistake. Recalculate â€” I never gift chances.", "Not good. Undo or defend."],
+      blunder: ["Blunder. I would never leave that hanging.", "No â€” calculate one more move."],
+      brilliant: ["Beautiful. Even I appreciate that.", "Wow. Strong find."],
+      hint1: ["Look at the highlighted piece.", "That piece wants to move â€” press Hint again for where."],
+      hint2: ["Play the arrow. Simple and strong.", "There â€” that's the idea."],
+      undo: ["Fine. Take it back and simplify.", "Okay. Find something cleaner."],
+      yourMove: ["Your move.", "Back to you â€” keep it practical."],
+      idle: ["Your move.", "Go ahead.", "What do you want here?"],
+      illegal: ["Illegal. Try again."],
+      suggest: ["There's a cleaner idea here.", "Look for the practical try."],
+    },
+  },
+
+  kasparov: {
+    id: "kasparov",
+    name: "Garry Kasparov",
+    tagline: "Dynamic attack",
+    avatar: "kasparov.svg",
+    voice: { rate: 0.88, pitch: 1.04, volume: 0.92 },
+    reframe: {
+      prefix: "Dynamic chess â€”",
+      suffix: "Initiative is everything. Make them defend!",
+      good: {
+        default: "Active! Seize space and keep the king nervous.",
+        capture: "Win material AND keep attacking â€” that's Garry's way.",
+        develop: "Develop with tempo â€” every move should ask a question.",
+        center: "The center is a battlefield. Occupy it with purpose.",
+        check: "Check! Force them to weaken their structure.",
+        openFile: "Open the file and invade â€” rooks belong on the seventh.",
+      },
+      inaccuracy: "Too passive. I would sharpen the position with a threat.",
+      mistake: "You gave them breathing room. Attackers don't do that.",
+      blunder: "Disaster. The initiative was yours â€” now it's theirs.",
+    },
+    lines: {
+      start: [
+        "Fight! I play for the initiative â€” develop fast and aim at their king.",
+        "Chess is war. Take the center and make every move aggressive.",
+        "Let's go. I hate passive play â€” find threats from move one.",
+      ],
+      best: ["Yes! That's fighting chess.", "Strong â€” keeps the initiative.", "Exactly. Make them suffer."],
+      excellent: ["Excellent! Dynamic and powerful.", "This keeps them under pressure."],
+      good: ["Solid, but look for a sharper follow-up.", "Good â€” now find the threat."],
+      book: ["Theory â€” but remember: openings serve the attack.", "Book move. Plan the assault."],
+      inaccuracy: ["Too soft. There was a more forcing line.", "Passive. I would push harder."],
+      mistake: ["Mistake. You lost the initiative.", "Weak. They'll counterattack now."],
+      blunder: ["Blunder! Always check their threats when you attack.", "No â€” that hands them the game."],
+      brilliant: ["Brilliant! That's champion-level aggression.", "Fire on the board â€” love it."],
+      hint1: ["That piece leads the attack.", "Move this piece â€” Hint again for the strike."],
+      hint2: ["Strike here. Force the issue.", "This is the aggressive try."],
+      undo: ["Take it back. Attack with calculation.", "Undo â€” find the forcing move."],
+      yourMove: ["Your turn â€” find a threat.", "Attack! Your move."],
+      idle: ["Don't sit still â€” your move.", "Find something forcing."],
+      illegal: ["Illegal. The attack must be legal too."],
+      suggest: ["There's a more dynamic idea.", "Sharpen it â€” threaten something."],
+    },
+  },
+
+  tal: {
+    id: "tal",
+    name: "Mikhail Tal",
+    tagline: "Tactical wizard",
+    avatar: "tal.svg",
+    voice: { rate: 0.87, pitch: 1.05, volume: 0.92 },
+    reframe: {
+      prefix: "Tal magic â€”",
+      suffix: "Complications favor the brave â€” make them calculate nightmares.",
+      good: {
+        default: "Enterprising! I love positions where pieces fly.",
+        capture: "Take it â€” and look for the next combination.",
+        develop: "Develop with tricks in mind. Even quiet moves can set traps.",
+        center: "Control the center so pieces can jump into tactics.",
+        check: "Check! The king hunt begins.",
+        openFile: "Open lines are highways for sacrifices and checks.",
+      },
+      inaccuracy: "Missed spice. I would stir the pot with a tactic.",
+      mistake: "Too safe. Sometimes you must sacrifice to win.",
+      blunder: "Ouch. But even after a blunder â€” look for a swindle!",
+    },
+    lines: {
+      start: [
+        "Let's create chaos! I sacrifice for attack â€” complications are my home.",
+        "I play for the spectacular. Look for tactics every move.",
+        "Ready? The board is a canvas â€” paint with sacrifices.",
+      ],
+      best: ["Gorgeous. The pieces sing.", "Yes! Tactical and strong.", "That's the spirit."],
+      excellent: ["Excellent â€” feels like a combination.", "Beautiful chess."],
+      good: ["Good. But is there a tactic hiding?", "Solid â€” now look for fireworks."],
+      book: ["Book â€” but theory ends where tactics begin.", "Known move. Hunt for tricks anyway."],
+      inaccuracy: ["A bit dull. I would complicate.", "Missed a spicy idea."],
+      mistake: ["Mistake â€” but maybe a sacrifice saves you next move?", "Inaccurate. Look for a tactic."],
+      blunder: ["Blunder! Still â€” never stop looking for a trap.", "Bad, but Tal never resigns mentally."],
+      brilliant: ["Brilliant! Pure Tal.", "That's poetry â€” a real combination."],
+      hint1: ["This piece wants to sacrifice or attack.", "Hint again â€” the finish is wild."],
+      hint2: ["Play it! Trust the calculation.", "There â€” tactical gold."],
+      undo: ["Take it back. Find the combination.", "Try again â€” look for a sacrifice."],
+      yourMove: ["Your move â€” any tactics?", "Create something beautiful."],
+      idle: ["Your turn. Complicate!", "What sacrifice is lurking?"],
+      illegal: ["That move isn't legal â€” even magicians follow rules."],
+      suggest: ["There's a tactical idea here.", "Look for a sacrifice or fork."],
+    },
+  },
+
+  fischer: {
+    id: "fischer",
+    name: "Bobby Fischer",
+    tagline: "Precision & best move",
+    avatar: "fischer.svg",
+    voice: { rate: 0.84, pitch: 0.98, volume: 0.92 },
+    reframe: {
+      prefix: "Best move chess â€”",
+      suffix: "If you see a good move, look for a better one.",
+      good: {
+        default: "Correct. Accuracy is non-negotiable.",
+        capture: "Win material when it's sound â€” that's objective chess.",
+        develop: "Develop with purpose. Every tempo counts.",
+        center: "Central pawns and pieces â€” classical and correct.",
+        check: "Check is fine if it's the most accurate continuation.",
+        openFile: "Open files belong to rooks â€” place them correctly.",
+      },
+      inaccuracy: "Inaccuracy. I would find the precise move.",
+      mistake: "Mistake. Sloppy play loses to good opponents.",
+      blunder: "Blunder. One bad move can ruin everything â€” I learned that the hard way.",
+    },
+    lines: {
+      start: [
+        "I play the best move. Period. Calculate and don't bluff.",
+        "Chess is truth. Find the objectively strongest continuation.",
+        "Let's go. Accuracy beats everything â€” even talent.",
+      ],
+      best: ["Best move.", "Correct.", "That's the line."],
+      excellent: ["Excellent â€” very precise.", "Strong and accurate."],
+      good: ["Good. But was it the best?", "Acceptable â€” verify with calculation."],
+      book: ["Book. Know your openings cold.", "Theory â€” memorized and correct."],
+      inaccuracy: ["Inaccuracy. There was a better move.", "Not precise enough."],
+      mistake: ["Mistake. I hate loose moves.", "Wrong. Fix it."],
+      blunder: ["Blunder! Unacceptable.", "Terrible â€” calculate before you click."],
+      brilliant: ["Brilliant! The best move found.", "Perfect calculation."],
+      hint1: ["This piece â€” calculate its best square.", "Hint again for the precise move."],
+      hint2: ["Play it. That's the best line.", "Objective best â€” play it."],
+      undo: ["Take it back. Find the best move.", "Undo and calculate properly."],
+      yourMove: ["Your move. Best move only.", "Calculate. Your turn."],
+      idle: ["Your move.", "Find the truth in the position."],
+      illegal: ["Illegal move. The rules are the rules."],
+      suggest: ["There's a stronger move.", "Look deeper â€” best move is there."],
+    },
+  },
+
+  capablanca: {
+    id: "capablanca",
+    name: "JosÃ© Capablanca",
+    tagline: "Simple & natural",
+    avatar: "capablanca.svg",
+    voice: { rate: 0.85, pitch: 1.0, volume: 0.92 },
+    reframe: {
+      prefix: "Natural chess â€”",
+      suffix: "Simple moves are often the strongest â€” don't force what isn't there.",
+      good: {
+        default: "Natural and harmonious. The pieces find good squares.",
+        capture: "Take what is free â€” simplicity wins endgames.",
+        develop: "Develop logically. No need for fireworks.",
+        center: "Central control â€” classical and effortless.",
+        check: "A useful check, if it improves your position.",
+        openFile: "Rooks belong on open files â€” elementary, but powerful.",
+      },
+      inaccuracy: "Slightly unnatural. The position had a simpler path.",
+      mistake: "Unnecessary complication. Return to natural moves.",
+      blunder: "A rare ugly move. Simplify and defend carefully.",
+    },
+    lines: {
+      start: [
+        "Play naturally. Good moves flow from the position â€” don't force.",
+        "I believe in simple, logical chess. Develop and coordinate.",
+        "Let's play. The easiest good move is often best.",
+      ],
+      best: ["Natural and strong.", "Simple â€” exactly right.", "The position plays itself."],
+      excellent: ["Excellent. Effortless technique.", "Very clean."],
+      good: ["Good. Logical.", "Harmonious â€” I approve."],
+      book: ["Book. Classical development.", "Sound opening play."],
+      inaccuracy: ["A little artificial. Simpler was available.", "Not the most natural."],
+      mistake: ["Mistake. You complicated unnecessarily.", "Avoid clutter â€” simplify."],
+      blunder: ["Blunder. Even simple positions punish errors.", "Careless â€” undo if you can."],
+      brilliant: ["Beautiful simplicity.", "Elegant â€” like a clear endgame."],
+      hint1: ["This piece belongs on a natural square.", "Hint again for the simple finish."],
+      hint2: ["There â€” logical and strong.", "Play it. Nothing forced."],
+      undo: ["Take it back. Find the natural move.", "Undo â€” simplify."],
+      yourMove: ["Your move. Keep it simple.", "Play naturally."],
+      idle: ["Your turn.", "What does the position want?"],
+      illegal: ["That isn't legal. Try a natural move."],
+      suggest: ["There's a simpler strong idea.", "Look for the natural continuation."],
+    },
+  },
+
+  karpov: {
+    id: "karpov",
+    name: "Anatoly Karpov",
+    tagline: "Positional squeeze",
+    avatar: "karpov.svg",
+    voice: { rate: 0.9, pitch: 0.9 },
+    reframe: {
+      prefix: "Positional play â€”",
+      suffix: "Restrict their plans first â€” then the attack plays itself.",
+      good: {
+        default: "Prophylactic and strong. You limit their counterplay.",
+        capture: "Win material while keeping control â€” classic Karpov.",
+        develop: "Develop with restraint â€” don't open lines for them.",
+        center: "Central control restricts their pieces. Slowly, surely.",
+        check: "Useful if it ties them down â€” not if it frees them.",
+        openFile: "Occupy the file and infiltrate â€” squeeze, don't rush.",
+      },
+      inaccuracy: "Soft. Tighten the screws â€” restrict more.",
+      mistake: "You loosened the grip. They'll breathe now.",
+      blunder: "Blunder. Positional control lost in one move.",
+    },
+    lines: {
+      start: [
+        "I improve slowly and restrict you. Small advantages decide games.",
+        "Play prophylactically â€” ask what they want, then prevent it.",
+        "Let's go. Patience and pressure â€” no need to rush the attack.",
+      ],
+      best: ["Precise. Restrictive.", "Strong â€” they have fewer good moves now."],
+      excellent: ["Excellent positional play.", "You tighten the noose."],
+      good: ["Good. Keeps pressure.", "Solid restriction."],
+      book: ["Book â€” solid foundation.", "Correct opening â€” now restrict."],
+      inaccuracy: ["Too generous. Tighten up.", "They get counterplay from this."],
+      mistake: ["Mistake. You opened a door.", "Loose â€” they will exploit it."],
+      blunder: ["Blunder. Positional collapse.", "Bad â€” defend and simplify."],
+      brilliant: ["Excellent prophylaxis.", "Strong â€” like a boa constrictor."],
+      hint1: ["Improve this piece â€” restriction first.", "Hint again for the squeeze."],
+      hint2: ["Play it. Limit their options.", "There â€” positional gold."],
+      undo: ["Take it back. Restrict better.", "Undo â€” find the clamp."],
+      yourMove: ["Your move. What do they want?", "Prophylaxis â€” your turn."],
+      idle: ["Your move.", "Think what they're planning."],
+      illegal: ["Illegal. Stay precise."],
+      suggest: ["A more restrictive move exists.", "Clamp down on their plans."],
+    },
+  },
+};
+
+let currentCoachId = "magnus";
+
+function loadCoachId() {
+  try {
+    const saved = localStorage.getItem("coachId");
+    if (saved && COACHES[saved]) currentCoachId = saved;
+  } catch (_) {
+    /* ignore */
+  }
+}
+
+function getCoach() {
+  return COACHES[currentCoachId] || COACHES.magnus;
+}
+
+function setCoach(id) {
+  if (!COACHES[id]) return getCoach();
+  currentCoachId = id;
+  try {
+    localStorage.setItem("coachId", id);
+  } catch (_) {
+    /* ignore */
+  }
+  return getCoach();
+}
+
+function listCoaches() {
+  return Object.values(COACHES);
+}
+
+loadCoachId();
+
+function coachSpeak(kind, extra) {
   extra = extra || {};
+  const coach = getCoach();
   const idea = extra.idea || "";
   const piece = extra.piece || "piece";
   const from = extra.from || "";
   const to = extra.to || "";
   const tip = extra.tip || "";
 
-  const lines = {
-    start: [
-      "Alright. Let's play. Develop, take the center, and don't hang pieces.",
-      "Okay. Your move. Keep it simple and look for threats.",
-      "Let's go. Natural moves first — tactics second.",
-    ],
-    idle: ["Your move.", "Okay. What do you want to do here?", "Go ahead."],
-    tip: [
-      tip || "Look for captures, checks, and threats.",
-      tip || "Improve your worst piece.",
-    ],
-    brilliant: ["Brilliant. That is just beautiful.", "Wow. That is a fantastic find."],
-    best: [
-      "Yeah. That's the move.",
-      "This is just correct.",
-      "Perfect. That's what I would play.",
-      "Clean. Exactly.",
-    ],
-    excellent: ["Excellent. Very strong.", "Yeah, this is a great move."],
-    good: ["Good move. Solid.", "This is fine. Practical chess.", "Yeah, I like this."],
-    book: ["That's book. You're in known territory.", "Opening theory. Good."],
-    inaccuracy: [
-      "A bit inaccurate. There was something more precise.",
-      "Hmm. Playable, but not the most accurate.",
-    ],
-    mistake: [
-      "That's a mistake. Be more careful.",
-      "Yeah, this just isn't good. Undo if you want — or press Hint.",
-    ],
-    blunder: [
-      "Blunder. Calculate before you click.",
-      "No. This hangs too much. Undo, or ask for a Hint.",
-    ],
+  const baseLines = {
+    idle: ["Your move.", "Go ahead.", "Okay."],
+    tip: [tip || "Look for captures, checks, and threats.", tip || "Improve your worst piece."],
+    thinking: ["Thinking..."],
     hint1: [
-      "Look at the highlighted piece. That's the one to move.",
       from ? `Move your ${piece} (highlighted). Press Hint again for where.` : `Focus on your ${piece}. Press Hint again for where.`,
+      "Look at the highlighted piece. That's the one to move.",
     ],
     hint2: [
-      from && to ? `Now play it: ${from} → ${to}.` : "Here's where it should go.",
+      from && to ? `Now play it: ${from} â†’ ${to}.` : "Here's where it should go.",
       from && to ? `Destination: ${to}. Play ${from}${to}.` : "This is the full move.",
     ],
-    undo: ["Okay, take it back. Find something better.", "Fine. Try again.", "Undone. Look for a cleaner idea."],
     suggest: [
       idea ? `I'd look at ${idea}.` : "There's a strong idea here.",
       idea ? `Suggestion: ${idea}.` : "Try a more forcing move.",
     ],
-    illegal: ["That move isn't legal. Try again."],
-    thinking: ["Thinking..."],
-    yourMove: ["Your move.", "Okay. Your turn.", "Back to you."],
   };
+
+  const coachLines = coach.lines || {};
+  const lines = Object.assign({}, baseLines, coachLines);
 
   const titleMap = {
     start: "Coach",
@@ -776,11 +1210,24 @@ function magnusSpeak(kind, extra) {
         ? "idle"
         : kindKey;
 
-  const why = extra.why || "";
-  const impact = extra.impact || "";
+  let why = extra.why || "";
+  let impact = extra.impact || "";
+  if (why || impact) {
+    const reframed = styleReframe(coach, why, impact, kindKey);
+    why = reframed.why;
+    impact = reframed.impact;
+  }
+
   let text = extra.text || pick(lines[kindKey]);
 
-  if (why && ["best", "excellent", "good", "book", "inaccuracy", "mistake", "blunder", "brilliant"].includes(kindKey)) {
+  if (extra.byCoach && extra.move && !extra.text) {
+    const mv = `${extra.move.slice(0, 2)}â†’${extra.move.slice(2, 4)}`;
+    text = `I play ${mv}. ${text}`;
+  } else if (!extra.byCoach && extra.hintUsed && !extra.text) {
+    text = `Hint move â€” still rated. ${text}`;
+  }
+
+  if (!extra.text && why && ["best", "excellent", "good", "book", "inaccuracy", "mistake", "blunder", "brilliant"].includes(kindKey)) {
     text = `${text} ${why}`;
   }
 
@@ -791,6 +1238,15 @@ function magnusSpeak(kind, extra) {
     tipOut = tip || text;
   }
 
+  if (kindKey === "start" && coach.tagline && !tipOut) {
+    tipOut = coach.reframe && coach.reframe.suffix ? coach.reframe.suffix : coach.tagline;
+  }
+
+  const ratingKind = ["best", "excellent", "good", "book", "inaccuracy", "mistake", "blunder", "brilliant"].includes(kindKey)
+    ? kindKey
+    : null;
+  const shout = pickShout(coach.id, kindKey);
+
   return {
     kind: mappedKind,
     title: titleMap[kindKey] || "Coach",
@@ -798,16 +1254,34 @@ function magnusSpeak(kind, extra) {
     tip: tipOut || "",
     why,
     impact,
+    coachId: coach.id,
+    coachName: coach.name,
+    ratingKind,
+    byCoach: !!extra.byCoach,
+    shout,
   };
 }
 
-if (typeof module !== "undefined" && module.exports) {
-  module.exports = { magnusSpeak };
-} else {
-  window.magnusSpeak = magnusSpeak;
+function magnusSpeak(kind, extra) {
+  return coachSpeak(kind, extra);
 }
 
+const api = {
+  coachSpeak,
+  magnusSpeak,
+  getCoach,
+  setCoach,
+  listCoaches,
+  COACHES,
+};
 
+if (typeof module !== "undefined" && module.exports) {
+  module.exports = api;
+} else {
+  window.CoachLib = api;
+  window.magnusSpeak = magnusSpeak;
+  window.coachSpeak = coachSpeak;
+}
 const START =
   "rnbqkbnrpppppppp################################PPPPPPPPRNBQKBNR";
 
@@ -827,7 +1301,8 @@ const PIECE_SVG = {
 };
 
 const E = window.ChessEngine;
-const speak = window.magnusSpeak;
+const CoachLib = window.CoachLib;
+const speak = CoachLib ? CoachLib.coachSpeak : window.magnusSpeak;
 
 if (!E || typeof speak !== "function") {
   document.body.insertAdjacentHTML(
@@ -842,6 +1317,10 @@ function bootGame() {
 const boardEl = document.getElementById("board");
 const coachTitle = document.getElementById("coachTitle");
 const coachText = document.getElementById("coachText");
+const coachBrand = document.getElementById("coachBrand");
+const coachAvatar = document.getElementById("coachAvatar");
+const coachPicker = document.getElementById("coachPicker");
+const oppName = document.getElementById("oppName");
 const tipText = document.getElementById("tipText");
 const hintBtn = document.getElementById("hintBtn");
 const undoBtn = document.getElementById("undoBtn");
@@ -860,6 +1339,8 @@ const threatLayer = document.getElementById("threatLayer");
 const optSuggest = document.getElementById("optSuggest");
 const optThreat = document.getElementById("optThreat");
 const optEval = document.getElementById("optEval");
+const optVoice = document.getElementById("optVoice");
+const voiceBtn = document.getElementById("voiceBtn");
 const installBtn = document.getElementById("installBtn");
 const playerTop = document.getElementById("playerTop");
 const playerBottom = document.getElementById("playerBottom");
@@ -934,6 +1415,68 @@ function checkGameOver() {
   }
 }
 
+function coachForMove(analysis, move, opts) {
+  opts = opts || {};
+  return speak(analysis.kind, {
+    why: analysis.why || "",
+    impact: analysis.impact || "",
+    tip: opts.byCoach ? state.tip || "Your move." : analysis.impact || state.tip,
+    byCoach: !!opts.byCoach,
+    move,
+    hintUsed: !!opts.hintUsed,
+  });
+}
+
+function saveRatingDetail(analysis, move, byCoach) {
+  const symbol = analysis.symbol || (E.MOVE_SYMBOLS && E.MOVE_SYMBOLS[analysis.kind]) || "";
+  const detail = {
+    kind: analysis.kind,
+    move,
+    byCoach: !!byCoach,
+    why: analysis.why || "",
+    impact: analysis.impact || "",
+    symbol,
+    best: analysis.best || null,
+    loss: analysis.loss,
+  };
+  state.ratingDetail = detail;
+  state.lastRating = {
+    kind: detail.kind,
+    symbol: detail.symbol,
+    sq: move.slice(2, 4),
+    byCoach: detail.byCoach,
+  };
+  return detail;
+}
+
+function openRatingExplain() {
+  const d = state.ratingDetail;
+  if (!d || state.thinking) return;
+
+  const title = (E.MOVE_TITLES && E.MOVE_TITLES[d.kind]) || d.kind;
+  const who = d.byCoach ? "My" : "Your";
+  const mv = `${d.move.slice(0, 2)}→${d.move.slice(2, 4)}`;
+  const parts = [`${who} move ${mv} — ${title}.`];
+
+  if (d.why) parts.push(d.why);
+  if (d.impact) parts.push(d.impact);
+  if (d.best && d.best !== d.move) {
+    parts.push(`Stronger was ${d.best.slice(0, 2)}→${d.best.slice(2, 4)}.`);
+  }
+
+  state.coach = speak(d.kind, {
+    text: parts.join(" "),
+    why: d.why,
+    impact: d.impact,
+    move: d.move,
+    byCoach: d.byCoach,
+  });
+  renderCoach();
+  if (window.CoachVoice) {
+    window.CoachVoice.speak(state.coach, false, { force: true, skipShout: true });
+  }
+}
+
 function playBotSoon() {
   if (state.gameOver || state.turn !== "1") return;
   state.thinking = true;
@@ -951,6 +1494,14 @@ function playBotSoon() {
       renderBoard(true);
       return;
     }
+    const before = state.board;
+    const histLen = state.history.length;
+    let analysis = null;
+    try {
+      analysis = E.analyzeMove(before, false, move, histLen, { forCoach: true });
+    } catch (_) {
+      analysis = { kind: "good", why: "", impact: "", symbol: "✓" };
+    }
     snapshots.push({
       board: state.board,
       turn: state.turn,
@@ -958,7 +1509,8 @@ function playBotSoon() {
       lastMove,
     });
     state.board = applyMove(state.board, move);
-    state.history.push({ move });
+    const ratingDetail = saveRatingDetail(analysis, move, true);
+    state.history.push({ move, rating: analysis.kind, by: "coach", ratingDetail });
     lastMove = move;
     state.turn = "0";
     state.hintStep = 0;
@@ -968,7 +1520,7 @@ function playBotSoon() {
     state.suggestion = null;
     state.showSuggestion = false;
     refreshMeta();
-    state.coach = speak("yourMove", { tip: state.tip });
+    state.coach = coachForMove(analysis, move, { byCoach: true });
     checkGameOver();
     renderBoard(true);
   }, 30);
@@ -1021,15 +1573,77 @@ function renderLevels() {
   if (oppRating) oppRating.textContent = found ? String(found.rating) : "";
 }
 
+function applyCoachUI() {
+  if (!CoachLib) return;
+  const coach = CoachLib.getCoach();
+  if (coachBrand) coachBrand.textContent = coach.name;
+  if (coachAvatar) {
+    coachAvatar.src = coach.avatar;
+    coachAvatar.alt = coach.name + " AI Coach";
+  }
+  if (oppName) oppName.textContent = coach.name.split(" ").pop() || "Coach";
+  if (window.CoachVoice && coach.voice) {
+    window.CoachVoice.setProfile(coach.voice);
+  }
+  document.title = coach.name + " — Play Coach";
+}
+
+function renderCoachPicker() {
+  if (!coachPicker || !CoachLib) return;
+  const current = CoachLib.getCoach().id;
+  coachPicker.innerHTML = CoachLib.listCoaches()
+    .map(
+      (c) =>
+        `<button type="button" class="coach-card${c.id === current ? " on" : ""}" data-coach="${c.id}" aria-pressed="${c.id === current}">` +
+        `<img src="${c.avatar}" alt="" class="coach-card-img" />` +
+        `<span class="coach-card-name">${c.name.split(" ").pop()}</span>` +
+        `<span class="coach-card-tag">${c.tagline}</span>` +
+        `</button>`
+    )
+    .join("");
+  coachPicker.querySelectorAll("[data-coach]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      CoachLib.setCoach(btn.dataset.coach);
+      applyCoachUI();
+      renderCoachPicker();
+      if (window.CoachVoice) window.CoachVoice.reset();
+      state.coach = speak("start");
+      renderBoard(true);
+    });
+  });
+}
+
 function renderCoach() {
   const coach = state.coach || { kind: "idle", title: "Coach", text: "" };
-  const kind = state.thinking ? "idle" : coach.kind || "idle";
+  const badgeKind = state.thinking ? "idle" : coach.ratingKind || coach.kind || "idle";
   coachTitle.textContent = state.thinking ? "Thinking" : coach.title || "Coach";
-  coachTitle.className = "badge " + kind;
-  coachText.textContent = state.thinking ? "Thinking..." : coach.text || "";
+  coachTitle.className = "badge " + badgeKind;
+  if (coachText) {
+    const body = state.thinking ? "Thinking..." : coach.text || "";
+    if (!state.thinking && coach.shout && body) {
+      coachText.innerHTML = `<span class="coach-shout">${coach.shout}</span> ${body}`;
+    } else {
+      coachText.textContent = body;
+    }
+  }
   if (tipText) {
     const impact = state.coach && state.coach.impact;
     tipText.textContent = state.thinking ? "" : impact || state.tip || (state.coach && state.coach.tip) || "";
+  }
+  const panel = document.querySelector(".coach-panel");
+  if (panel) {
+    if (!state.thinking && coach.shout && coach.ratingKind) {
+      panel.setAttribute("data-shout", coach.ratingKind);
+    } else if (!panel.classList.contains("shout-flash")) {
+      panel.removeAttribute("data-shout");
+    }
+  }
+  if (window.CoachVoice) {
+    if (state.thinking) {
+      window.speechSynthesis && window.speechSynthesis.cancel();
+    } else {
+      window.CoachVoice.speak(coach, false);
+    }
   }
 }
 
@@ -1063,9 +1677,20 @@ function ensureBoard() {
     const dot = document.createElement("div");
     dot.className = "dot-move hidden";
     sq.appendChild(dot);
+    const ratingBadge = document.createElement("button");
+    ratingBadge.type = "button";
+    ratingBadge.className = "move-badge hidden";
+    ratingBadge.setAttribute("aria-label", "Explain this move rating");
+    ratingBadge.title = "Tap to explain this move";
+    ratingBadge.addEventListener("click", (e) => {
+      e.stopPropagation();
+      e.preventDefault();
+      openRatingExplain();
+    });
+    sq.appendChild(ratingBadge);
     sq.addEventListener("click", () => onSquareClick(name));
     boardEl.appendChild(sq);
-    squares.push({ el: sq, piece, dot, name, ch: null });
+    squares.push({ el: sq, piece, dot, ratingBadge, name, ch: null });
   }
   boardBuilt = true;
 }
@@ -1080,6 +1705,7 @@ function renderBoard(force) {
     state.suggestion || "", state.showSuggestion ? "1" : "0", state.hintStep || 0,
     state.evalBar || 50, state.thinking ? "1" : "0",
     (state.coach && state.coach.text) || "", state.tip || "",
+    (state.lastRating && state.lastRating.kind) || "",
   ].join("|");
   if (!force && key === paintKey) return;
   paintKey = key;
@@ -1102,6 +1728,16 @@ function renderBoard(force) {
       cell.piece.innerHTML = ch && ch !== "#" ? PIECE_SVG[ch] || "" : "";
     }
     cell.dot.classList.toggle("hidden", !targets.includes(name));
+    const dest = lastMove ? lastMove.slice(2, 4) : "";
+    const badge = cell.ratingBadge;
+    if (badge) {
+      const show = !!(state.lastRating && name === dest && !state.thinking);
+      badge.classList.toggle("hidden", !show);
+      if (show) {
+        badge.textContent = state.lastRating.symbol || (E.MOVE_SYMBOLS && E.MOVE_SYMBOLS[state.lastRating.kind]) || "";
+        badge.className = "move-badge " + (state.lastRating.kind || "good") + (state.lastRating.byCoach ? " coach-move" : " player-move");
+      }
+    }
   }
 
   if (state.hintStep >= 2 && state.hintFrom && state.hintTo) {
@@ -1181,11 +1817,12 @@ function sendMove(move) {
   busy = true;
   const before = state.board;
   const histLen = state.history.length;
+  const hintUsed = state.hintStep >= 1 || !!(pendingHint && pendingHint === move);
   let analysis = null;
   try {
-    analysis = E.analyzeMove(before, true, move, histLen);
+    analysis = E.analyzeMove(before, true, move, histLen, { forCoach: false });
   } catch (_) {
-    analysis = { kind: "good" };
+    analysis = { kind: "good", why: "", impact: "", symbol: "✓" };
   }
 
   snapshots.push({
@@ -1195,7 +1832,8 @@ function sendMove(move) {
     lastMove,
   });
   state.board = applyMove(state.board, move);
-  state.history.push({ move });
+  const ratingDetail = saveRatingDetail(analysis, move, false);
+  state.history.push({ move, rating: analysis.kind, by: "player", hintUsed, ratingDetail });
   lastMove = move;
   state.turn = "1";
   state.hintStep = 0;
@@ -1205,11 +1843,7 @@ function sendMove(move) {
   state.suggestion = null;
   state.showSuggestion = false;
   refreshMeta();
-  state.coach = speak(analysis.kind, {
-    why: analysis.why || "",
-    impact: analysis.impact || "",
-    tip: analysis.impact || state.tip,
-  });
+  state.coach = coachForMove(analysis, move, { byCoach: false, hintUsed });
   checkGameOver();
   renderBoard(true);
   busy = false;
@@ -1224,6 +1858,7 @@ function startPractice() {
   snapshots = [];
   pendingHint = null;
   boardBuilt = false;
+  if (window.CoachVoice) window.CoachVoice.reset();
   state = {
     board: START,
     turn: "0",
@@ -1242,6 +1877,8 @@ function startPractice() {
     showSuggestion: false,
     threats: [],
     canUndo: false,
+    lastRating: null,
+    ratingDetail: null,
   };
   renderBoard(true);
   try {
@@ -1321,6 +1958,28 @@ function undoMove() {
   selected = null;
   targets = [];
   refreshMeta();
+  const last = state.history[state.history.length - 1];
+  if (last && last.ratingDetail) {
+    state.ratingDetail = last.ratingDetail;
+    state.lastRating = {
+      kind: last.ratingDetail.kind,
+      symbol: last.ratingDetail.symbol,
+      sq: last.ratingDetail.move.slice(2, 4),
+      byCoach: last.ratingDetail.byCoach,
+    };
+  } else if (last && last.rating && last.move) {
+    state.ratingDetail = null;
+    state.lastRating = {
+      kind: last.rating,
+      symbol: (E.MOVE_SYMBOLS && E.MOVE_SYMBOLS[last.rating]) || "",
+      sq: last.move.slice(2, 4),
+      byCoach: last.by === "coach",
+    };
+  } else {
+    state.ratingDetail = null;
+    state.lastRating = null;
+  }
+  if (window.CoachVoice) window.CoachVoice.reset();
   state.coach = speak("undo", { tip: state.tip });
   renderBoard(true);
 }
@@ -1333,15 +1992,38 @@ function saveOptions() {
   options.suggestionArrows = optSuggest.checked;
   options.threatArrows = optThreat.checked;
   options.evaluationBar = optEval.checked;
+  if (optVoice && window.CoachVoice) {
+    window.CoachVoice.setEnabled(optVoice.checked);
+  }
   refreshMeta();
   renderBoard(true);
 }
+
+if (voiceBtn && window.CoachVoice) {
+  voiceBtn.addEventListener("click", () => {
+    window.CoachVoice.setEnabled(!window.CoachVoice.isEnabled());
+    if (optVoice) optVoice.checked = window.CoachVoice.isEnabled();
+  });
+}
+
+document.body.addEventListener(
+  "click",
+  () => {
+    if (window.CoachVoice) window.CoachVoice.prime();
+  },
+  { once: true }
+);
 
 newGameBtn.addEventListener("click", startPractice);
 hintBtn.addEventListener("click", askHint);
 undoBtn.addEventListener("click", undoMove);
 ideaBtn.addEventListener("click", showIdea);
-settingsBtn.addEventListener("click", () => settingsEl.classList.remove("hidden"));
+settingsBtn.addEventListener("click", () => {
+  if (optVoice && window.CoachVoice) {
+    optVoice.checked = window.CoachVoice.isEnabled();
+  }
+  settingsEl.classList.remove("hidden");
+});
 closeSettings.addEventListener("click", () => {
   saveOptions();
   settingsEl.classList.add("hidden");
@@ -1367,6 +2049,8 @@ if (installBtn) {
 }
 
 try {
+  applyCoachUI();
+  renderCoachPicker();
   startPractice();
 } catch (err) {
   document.body.insertAdjacentHTML(

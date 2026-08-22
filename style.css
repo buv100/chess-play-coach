@@ -55,30 +55,148 @@ body {
   display: none !important;
 }
 
-/* ── Coach bar (Play Coach) ── */
-.coach-bar {
-  display: grid;
-  grid-template-columns: 40px 1fr auto;
-  gap: 10px;
-  align-items: center;
-  padding: 10px 12px;
+/* ── Play Coach panel (Chess.com style) ── */
+.coach-panel {
   background: var(--cc-bg-deep);
   border-bottom: 1px solid var(--cc-border);
-  min-height: 68px;
+  padding: 10px 12px 12px;
+  display: grid;
+  gap: 8px;
 }
 
-.magnus {
-  width: 40px;
-  height: 40px;
+.coach-top {
+  display: grid;
+  grid-template-columns: 56px 1fr auto;
+  gap: 10px;
+  align-items: center;
+}
+
+.magnus-avatar {
+  position: relative;
+  width: 56px;
+  height: 56px;
   border-radius: 50%;
-  border: 2px solid var(--cc-brand);
-  background:
-    radial-gradient(circle at 38% 36%, #3a2a22 0 6%, transparent 7%),
-    radial-gradient(circle at 62% 36%, #3a2a22 0 6%, transparent 7%),
-    radial-gradient(circle at 50% 44%, #e8c7a4 0 34%, transparent 35%),
-    radial-gradient(circle at 50% 18%, #c4a070 0 28%, transparent 29%),
-    linear-gradient(#2b2b2b, #111);
-  flex-shrink: 0;
+  padding: 2px;
+  background: var(--cc-surface);
+  box-shadow: 0 0 0 2px var(--cc-border);
+  transition: box-shadow 0.2s ease, transform 0.2s ease;
+}
+
+.magnus-avatar.speaking {
+  box-shadow: 0 0 0 2px var(--cc-brand), 0 0 16px rgba(129, 182, 76, 0.45);
+  animation: coach-pulse 1.2s ease-in-out infinite;
+}
+
+.magnus-avatar.shouting {
+  animation: coach-shout 0.22s ease-in-out 4;
+  z-index: 2;
+}
+
+.magnus-avatar.shouting[data-shout-kind="brilliant"] {
+  box-shadow: 0 0 0 3px #1babff, 0 0 22px rgba(27, 171, 255, 0.65);
+}
+
+.magnus-avatar.shouting[data-shout-kind="blunder"],
+.magnus-avatar.shouting[data-shout-kind="mistake"] {
+  box-shadow: 0 0 0 3px var(--cc-danger), 0 0 22px rgba(194, 59, 34, 0.65);
+}
+
+.magnus-avatar.shouting[data-shout-kind="inaccuracy"] {
+  box-shadow: 0 0 0 3px var(--cc-warning), 0 0 18px rgba(235, 180, 50, 0.55);
+}
+
+.coach-panel.shout-flash .coach-speech {
+  animation: speech-pop 0.35s ease-out;
+}
+
+@keyframes coach-shout {
+  0%, 100% { transform: scale(1) rotate(0deg); }
+  25% { transform: scale(1.1) rotate(-4deg); }
+  75% { transform: scale(1.1) rotate(4deg); }
+}
+
+@keyframes speech-pop {
+  0% { transform: scale(1); }
+  35% { transform: scale(1.04); }
+  100% { transform: scale(1); }
+}
+
+@keyframes coach-pulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.03); }
+}
+
+.magnus-photo {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  object-fit: cover;
+  display: block;
+  background: #2a2520;
+}
+
+.ai-tag {
+  position: absolute;
+  right: -2px;
+  bottom: -2px;
+  background: var(--cc-brand);
+  color: var(--cc-on-brand);
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  padding: 2px 5px;
+  border-radius: 4px;
+  border: 2px solid var(--cc-bg-deep);
+  line-height: 1;
+}
+
+.coach-identity {
+  min-width: 0;
+}
+
+.play-coach-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--cc-brand-light, #b2e068);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.voice-toggle {
+  border: 0;
+  background: var(--cc-surface);
+  color: var(--cc-text);
+  width: 36px;
+  height: 36px;
+  border-radius: var(--cc-radius);
+  font-size: 16px;
+  cursor: pointer;
+  line-height: 1;
+}
+
+.voice-toggle.off {
+  opacity: 0.55;
+}
+
+.coach-speech {
+  background: var(--cc-surface);
+  border: 1px solid var(--cc-border);
+  border-radius: var(--cc-radius-lg);
+  padding: 10px 12px;
+  position: relative;
+}
+
+.coach-speech::before {
+  content: "";
+  position: absolute;
+  top: -6px;
+  left: 24px;
+  width: 12px;
+  height: 12px;
+  background: var(--cc-surface);
+  border-left: 1px solid var(--cc-border);
+  border-top: 1px solid var(--cc-border);
+  transform: rotate(45deg);
 }
 
 .coach-copy {
@@ -93,9 +211,9 @@ body {
 }
 
 .brand {
-  font-size: 14px;
+  font-size: 15px;
   font-weight: 700;
-  color: var(--cc-text-soft);
+  color: var(--cc-text);
 }
 
 .badge {
@@ -109,10 +227,14 @@ body {
   color: var(--cc-text-muted);
 }
 
+.badge.brilliant {
+  background: #1babff;
+  color: #fff;
+}
+
 .badge.best,
 .badge.excellent,
 .badge.good,
-.badge.brilliant,
 .badge.book {
   background: var(--cc-brand);
   color: var(--cc-on-brand);
@@ -140,30 +262,46 @@ body {
 
 #coachText {
   margin: 0;
-  font-size: 13px;
-  line-height: 1.35;
-  color: var(--cc-text-default);
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
+  font-size: 14px;
+  line-height: 1.4;
+  color: var(--cc-text-soft);
+}
+
+.coach-shout {
+  display: inline-block;
+  font-size: 18px;
+  font-weight: 800;
+  color: #1babff;
+  margin-right: 4px;
+  animation: shout-text 0.35s ease-out 2;
+}
+
+.coach-panel[data-shout="blunder"] .coach-shout,
+.coach-panel[data-shout="mistake"] .coach-shout {
+  color: var(--cc-danger);
+}
+
+.coach-panel[data-shout="inaccuracy"] .coach-shout {
+  color: var(--cc-warning);
+}
+
+@keyframes shout-text {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.15); }
 }
 
 .tip-line {
-  margin: 3px 0 0;
-  font-size: 11px;
-  line-height: 1.3;
+  margin: 6px 0 0;
+  font-size: 12px;
+  line-height: 1.35;
   color: var(--cc-text-muted);
-  min-height: 14px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  min-height: 0;
 }
 
 .coach-actions {
   display: flex;
-  flex-direction: column;
-  gap: 4px;
+  justify-content: flex-end;
+  gap: 6px;
 }
 
 .idea {
@@ -463,6 +601,68 @@ body {
   display: block;
 }
 
+.move-badge {
+  position: absolute;
+  top: 3px;
+  right: 3px;
+  z-index: 6;
+  font-size: 10px;
+  font-weight: 800;
+  line-height: 1;
+  padding: 3px 5px;
+  border-radius: 4px;
+  pointer-events: auto;
+  cursor: pointer;
+  border: 0;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.35);
+  letter-spacing: -0.02em;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.move-badge:not(.hidden):hover,
+.move-badge:not(.hidden):focus-visible {
+  transform: scale(1.12);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.45);
+  outline: 2px solid rgba(255, 255, 255, 0.5);
+  outline-offset: 1px;
+}
+
+.move-badge.hidden {
+  display: none;
+}
+
+.move-badge.brilliant {
+  background: #1babff;
+  color: #fff;
+}
+
+.move-badge.best,
+.move-badge.excellent,
+.move-badge.good,
+.move-badge.book {
+  background: var(--cc-brand);
+  color: var(--cc-on-brand);
+}
+
+.move-badge.inaccuracy {
+  background: var(--cc-warning);
+  color: #1a1400;
+}
+
+.move-badge.mistake {
+  background: #f18b4c;
+  color: #2a1200;
+}
+
+.move-badge.blunder {
+  background: var(--cc-danger);
+  color: #fff;
+}
+
+.move-badge.coach-move {
+  outline: 1px solid rgba(255, 255, 255, 0.35);
+}
+
 /* Legal move dots — Chess.com style */
 .dot-move {
   position: absolute;
@@ -581,6 +781,63 @@ body {
   color: var(--cc-text-default);
 }
 
+.settings-label {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--cc-text-muted);
+}
+
+.coach-picker {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  max-height: 220px;
+  overflow-y: auto;
+  padding-bottom: 4px;
+}
+
+.coach-card {
+  border: 2px solid var(--cc-border);
+  background: var(--cc-surface);
+  border-radius: var(--cc-radius);
+  padding: 8px 6px;
+  cursor: pointer;
+  display: grid;
+  gap: 4px;
+  justify-items: center;
+  text-align: center;
+  color: var(--cc-text);
+  min-height: 0;
+}
+
+.coach-card.on {
+  border-color: var(--cc-brand);
+  background: rgba(129, 182, 76, 0.12);
+}
+
+.coach-card-img {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  object-fit: cover;
+  background: #2a2520;
+}
+
+.coach-card-name {
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.coach-card-tag {
+  font-size: 9px;
+  color: var(--cc-text-muted);
+  line-height: 1.2;
+}
+
 .sheet-card button {
   border: 0;
   background: var(--cc-brand);
@@ -599,33 +856,24 @@ body {
     grid-template-rows: minmax(0, 1fr);
   }
 
-  .coach-bar {
+  .coach-panel {
     grid-column: 2;
     grid-row: 1;
     align-self: start;
     border-bottom: 0;
     border-left: 1px solid var(--cc-border);
-    grid-template-columns: 48px 1fr;
-    grid-template-rows: auto auto auto;
-    height: auto;
-    align-content: start;
-    gap: 10px;
     padding: 16px;
-    min-height: 0;
+    max-height: 100%;
+    overflow: auto;
   }
 
-  .coach-bar .coach-actions {
-    grid-column: 1 / -1;
-    flex-direction: row;
+  .coach-top {
+    grid-template-columns: 64px 1fr auto;
   }
 
-  #coachText {
-    -webkit-line-clamp: 6;
-  }
-
-  .tip-line {
-    white-space: normal;
-    overflow: visible;
+  .magnus-avatar {
+    width: 64px;
+    height: 64px;
   }
 
   .play {

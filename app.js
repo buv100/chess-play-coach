@@ -17,7 +17,8 @@ const PIECE_SVG = {
 };
 
 const E = window.ChessEngine;
-const speak = window.magnusSpeak;
+const CoachLib = window.CoachLib;
+const speak = CoachLib ? CoachLib.coachSpeak : window.magnusSpeak;
 
 if (!E || typeof speak !== "function") {
   document.body.insertAdjacentHTML(
@@ -32,6 +33,10 @@ function bootGame() {
 const boardEl = document.getElementById("board");
 const coachTitle = document.getElementById("coachTitle");
 const coachText = document.getElementById("coachText");
+const coachBrand = document.getElementById("coachBrand");
+const coachAvatar = document.getElementById("coachAvatar");
+const coachPicker = document.getElementById("coachPicker");
+const oppName = document.getElementById("oppName");
 const tipText = document.getElementById("tipText");
 const hintBtn = document.getElementById("hintBtn");
 const undoBtn = document.getElementById("undoBtn");
@@ -50,6 +55,8 @@ const threatLayer = document.getElementById("threatLayer");
 const optSuggest = document.getElementById("optSuggest");
 const optThreat = document.getElementById("optThreat");
 const optEval = document.getElementById("optEval");
+const optVoice = document.getElementById("optVoice");
+const voiceBtn = document.getElementById("voiceBtn");
 const installBtn = document.getElementById("installBtn");
 const playerTop = document.getElementById("playerTop");
 const playerBottom = document.getElementById("playerBottom");
@@ -124,6 +131,68 @@ function checkGameOver() {
   }
 }
 
+function coachForMove(analysis, move, opts) {
+  opts = opts || {};
+  return speak(analysis.kind, {
+    why: analysis.why || "",
+    impact: analysis.impact || "",
+    tip: opts.byCoach ? state.tip || "Your move." : analysis.impact || state.tip,
+    byCoach: !!opts.byCoach,
+    move,
+    hintUsed: !!opts.hintUsed,
+  });
+}
+
+function saveRatingDetail(analysis, move, byCoach) {
+  const symbol = analysis.symbol || (E.MOVE_SYMBOLS && E.MOVE_SYMBOLS[analysis.kind]) || "";
+  const detail = {
+    kind: analysis.kind,
+    move,
+    byCoach: !!byCoach,
+    why: analysis.why || "",
+    impact: analysis.impact || "",
+    symbol,
+    best: analysis.best || null,
+    loss: analysis.loss,
+  };
+  state.ratingDetail = detail;
+  state.lastRating = {
+    kind: detail.kind,
+    symbol: detail.symbol,
+    sq: move.slice(2, 4),
+    byCoach: detail.byCoach,
+  };
+  return detail;
+}
+
+function openRatingExplain() {
+  const d = state.ratingDetail;
+  if (!d || state.thinking) return;
+
+  const title = (E.MOVE_TITLES && E.MOVE_TITLES[d.kind]) || d.kind;
+  const who = d.byCoach ? "My" : "Your";
+  const mv = `${d.move.slice(0, 2)}→${d.move.slice(2, 4)}`;
+  const parts = [`${who} move ${mv} — ${title}.`];
+
+  if (d.why) parts.push(d.why);
+  if (d.impact) parts.push(d.impact);
+  if (d.best && d.best !== d.move) {
+    parts.push(`Stronger was ${d.best.slice(0, 2)}→${d.best.slice(2, 4)}.`);
+  }
+
+  state.coach = speak(d.kind, {
+    text: parts.join(" "),
+    why: d.why,
+    impact: d.impact,
+    move: d.move,
+    byCoach: d.byCoach,
+  });
+  renderCoach();
+  if (window.CoachVoice) {
+    window.CoachVoice.speak(state.coach, false, { force: true, skipShout: true });
+  }
+}
+
 function playBotSoon() {
   if (state.gameOver || state.turn !== "1") return;
   state.thinking = true;
@@ -141,6 +210,14 @@ function playBotSoon() {
       renderBoard(true);
       return;
     }
+    const before = state.board;
+    const histLen = state.history.length;
+    let analysis = null;
+    try {
+      analysis = E.analyzeMove(before, false, move, histLen, { forCoach: true });
+    } catch (_) {
+      analysis = { kind: "good", why: "", impact: "", symbol: "✓" };
+    }
     snapshots.push({
       board: state.board,
       turn: state.turn,
@@ -148,7 +225,8 @@ function playBotSoon() {
       lastMove,
     });
     state.board = applyMove(state.board, move);
-    state.history.push({ move });
+    const ratingDetail = saveRatingDetail(analysis, move, true);
+    state.history.push({ move, rating: analysis.kind, by: "coach", ratingDetail });
     lastMove = move;
     state.turn = "0";
     state.hintStep = 0;
@@ -158,7 +236,7 @@ function playBotSoon() {
     state.suggestion = null;
     state.showSuggestion = false;
     refreshMeta();
-    state.coach = speak("yourMove", { tip: state.tip });
+    state.coach = coachForMove(analysis, move, { byCoach: true });
     checkGameOver();
     renderBoard(true);
   }, 30);
@@ -211,15 +289,77 @@ function renderLevels() {
   if (oppRating) oppRating.textContent = found ? String(found.rating) : "";
 }
 
+function applyCoachUI() {
+  if (!CoachLib) return;
+  const coach = CoachLib.getCoach();
+  if (coachBrand) coachBrand.textContent = coach.name;
+  if (coachAvatar) {
+    coachAvatar.src = coach.avatar;
+    coachAvatar.alt = coach.name + " AI Coach";
+  }
+  if (oppName) oppName.textContent = coach.name.split(" ").pop() || "Coach";
+  if (window.CoachVoice && coach.voice) {
+    window.CoachVoice.setProfile(coach.voice);
+  }
+  document.title = coach.name + " — Play Coach";
+}
+
+function renderCoachPicker() {
+  if (!coachPicker || !CoachLib) return;
+  const current = CoachLib.getCoach().id;
+  coachPicker.innerHTML = CoachLib.listCoaches()
+    .map(
+      (c) =>
+        `<button type="button" class="coach-card${c.id === current ? " on" : ""}" data-coach="${c.id}" aria-pressed="${c.id === current}">` +
+        `<img src="${c.avatar}" alt="" class="coach-card-img" />` +
+        `<span class="coach-card-name">${c.name.split(" ").pop()}</span>` +
+        `<span class="coach-card-tag">${c.tagline}</span>` +
+        `</button>`
+    )
+    .join("");
+  coachPicker.querySelectorAll("[data-coach]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      CoachLib.setCoach(btn.dataset.coach);
+      applyCoachUI();
+      renderCoachPicker();
+      if (window.CoachVoice) window.CoachVoice.reset();
+      state.coach = speak("start");
+      renderBoard(true);
+    });
+  });
+}
+
 function renderCoach() {
   const coach = state.coach || { kind: "idle", title: "Coach", text: "" };
-  const kind = state.thinking ? "idle" : coach.kind || "idle";
+  const badgeKind = state.thinking ? "idle" : coach.ratingKind || coach.kind || "idle";
   coachTitle.textContent = state.thinking ? "Thinking" : coach.title || "Coach";
-  coachTitle.className = "badge " + kind;
-  coachText.textContent = state.thinking ? "Thinking..." : coach.text || "";
+  coachTitle.className = "badge " + badgeKind;
+  if (coachText) {
+    const body = state.thinking ? "Thinking..." : coach.text || "";
+    if (!state.thinking && coach.shout && body) {
+      coachText.innerHTML = `<span class="coach-shout">${coach.shout}</span> ${body}`;
+    } else {
+      coachText.textContent = body;
+    }
+  }
   if (tipText) {
     const impact = state.coach && state.coach.impact;
     tipText.textContent = state.thinking ? "" : impact || state.tip || (state.coach && state.coach.tip) || "";
+  }
+  const panel = document.querySelector(".coach-panel");
+  if (panel) {
+    if (!state.thinking && coach.shout && coach.ratingKind) {
+      panel.setAttribute("data-shout", coach.ratingKind);
+    } else if (!panel.classList.contains("shout-flash")) {
+      panel.removeAttribute("data-shout");
+    }
+  }
+  if (window.CoachVoice) {
+    if (state.thinking) {
+      window.speechSynthesis && window.speechSynthesis.cancel();
+    } else {
+      window.CoachVoice.speak(coach, false);
+    }
   }
 }
 
@@ -253,9 +393,20 @@ function ensureBoard() {
     const dot = document.createElement("div");
     dot.className = "dot-move hidden";
     sq.appendChild(dot);
+    const ratingBadge = document.createElement("button");
+    ratingBadge.type = "button";
+    ratingBadge.className = "move-badge hidden";
+    ratingBadge.setAttribute("aria-label", "Explain this move rating");
+    ratingBadge.title = "Tap to explain this move";
+    ratingBadge.addEventListener("click", (e) => {
+      e.stopPropagation();
+      e.preventDefault();
+      openRatingExplain();
+    });
+    sq.appendChild(ratingBadge);
     sq.addEventListener("click", () => onSquareClick(name));
     boardEl.appendChild(sq);
-    squares.push({ el: sq, piece, dot, name, ch: null });
+    squares.push({ el: sq, piece, dot, ratingBadge, name, ch: null });
   }
   boardBuilt = true;
 }
@@ -270,6 +421,7 @@ function renderBoard(force) {
     state.suggestion || "", state.showSuggestion ? "1" : "0", state.hintStep || 0,
     state.evalBar || 50, state.thinking ? "1" : "0",
     (state.coach && state.coach.text) || "", state.tip || "",
+    (state.lastRating && state.lastRating.kind) || "",
   ].join("|");
   if (!force && key === paintKey) return;
   paintKey = key;
@@ -292,6 +444,16 @@ function renderBoard(force) {
       cell.piece.innerHTML = ch && ch !== "#" ? PIECE_SVG[ch] || "" : "";
     }
     cell.dot.classList.toggle("hidden", !targets.includes(name));
+    const dest = lastMove ? lastMove.slice(2, 4) : "";
+    const badge = cell.ratingBadge;
+    if (badge) {
+      const show = !!(state.lastRating && name === dest && !state.thinking);
+      badge.classList.toggle("hidden", !show);
+      if (show) {
+        badge.textContent = state.lastRating.symbol || (E.MOVE_SYMBOLS && E.MOVE_SYMBOLS[state.lastRating.kind]) || "";
+        badge.className = "move-badge " + (state.lastRating.kind || "good") + (state.lastRating.byCoach ? " coach-move" : " player-move");
+      }
+    }
   }
 
   if (state.hintStep >= 2 && state.hintFrom && state.hintTo) {
@@ -371,11 +533,12 @@ function sendMove(move) {
   busy = true;
   const before = state.board;
   const histLen = state.history.length;
+  const hintUsed = state.hintStep >= 1 || !!(pendingHint && pendingHint === move);
   let analysis = null;
   try {
-    analysis = E.analyzeMove(before, true, move, histLen);
+    analysis = E.analyzeMove(before, true, move, histLen, { forCoach: false });
   } catch (_) {
-    analysis = { kind: "good" };
+    analysis = { kind: "good", why: "", impact: "", symbol: "✓" };
   }
 
   snapshots.push({
@@ -385,7 +548,8 @@ function sendMove(move) {
     lastMove,
   });
   state.board = applyMove(state.board, move);
-  state.history.push({ move });
+  const ratingDetail = saveRatingDetail(analysis, move, false);
+  state.history.push({ move, rating: analysis.kind, by: "player", hintUsed, ratingDetail });
   lastMove = move;
   state.turn = "1";
   state.hintStep = 0;
@@ -395,11 +559,7 @@ function sendMove(move) {
   state.suggestion = null;
   state.showSuggestion = false;
   refreshMeta();
-  state.coach = speak(analysis.kind, {
-    why: analysis.why || "",
-    impact: analysis.impact || "",
-    tip: analysis.impact || state.tip,
-  });
+  state.coach = coachForMove(analysis, move, { byCoach: false, hintUsed });
   checkGameOver();
   renderBoard(true);
   busy = false;
@@ -414,6 +574,7 @@ function startPractice() {
   snapshots = [];
   pendingHint = null;
   boardBuilt = false;
+  if (window.CoachVoice) window.CoachVoice.reset();
   state = {
     board: START,
     turn: "0",
@@ -432,6 +593,8 @@ function startPractice() {
     showSuggestion: false,
     threats: [],
     canUndo: false,
+    lastRating: null,
+    ratingDetail: null,
   };
   renderBoard(true);
   try {
@@ -511,6 +674,28 @@ function undoMove() {
   selected = null;
   targets = [];
   refreshMeta();
+  const last = state.history[state.history.length - 1];
+  if (last && last.ratingDetail) {
+    state.ratingDetail = last.ratingDetail;
+    state.lastRating = {
+      kind: last.ratingDetail.kind,
+      symbol: last.ratingDetail.symbol,
+      sq: last.ratingDetail.move.slice(2, 4),
+      byCoach: last.ratingDetail.byCoach,
+    };
+  } else if (last && last.rating && last.move) {
+    state.ratingDetail = null;
+    state.lastRating = {
+      kind: last.rating,
+      symbol: (E.MOVE_SYMBOLS && E.MOVE_SYMBOLS[last.rating]) || "",
+      sq: last.move.slice(2, 4),
+      byCoach: last.by === "coach",
+    };
+  } else {
+    state.ratingDetail = null;
+    state.lastRating = null;
+  }
+  if (window.CoachVoice) window.CoachVoice.reset();
   state.coach = speak("undo", { tip: state.tip });
   renderBoard(true);
 }
@@ -523,15 +708,38 @@ function saveOptions() {
   options.suggestionArrows = optSuggest.checked;
   options.threatArrows = optThreat.checked;
   options.evaluationBar = optEval.checked;
+  if (optVoice && window.CoachVoice) {
+    window.CoachVoice.setEnabled(optVoice.checked);
+  }
   refreshMeta();
   renderBoard(true);
 }
+
+if (voiceBtn && window.CoachVoice) {
+  voiceBtn.addEventListener("click", () => {
+    window.CoachVoice.setEnabled(!window.CoachVoice.isEnabled());
+    if (optVoice) optVoice.checked = window.CoachVoice.isEnabled();
+  });
+}
+
+document.body.addEventListener(
+  "click",
+  () => {
+    if (window.CoachVoice) window.CoachVoice.prime();
+  },
+  { once: true }
+);
 
 newGameBtn.addEventListener("click", startPractice);
 hintBtn.addEventListener("click", askHint);
 undoBtn.addEventListener("click", undoMove);
 ideaBtn.addEventListener("click", showIdea);
-settingsBtn.addEventListener("click", () => settingsEl.classList.remove("hidden"));
+settingsBtn.addEventListener("click", () => {
+  if (optVoice && window.CoachVoice) {
+    optVoice.checked = window.CoachVoice.isEnabled();
+  }
+  settingsEl.classList.remove("hidden");
+});
 closeSettings.addEventListener("click", () => {
   saveOptions();
   settingsEl.classList.add("hidden");
@@ -557,6 +765,8 @@ if (installBtn) {
 }
 
 try {
+  applyCoachUI();
+  renderCoachPicker();
   startPractice();
 } catch (err) {
   document.body.insertAdjacentHTML(
