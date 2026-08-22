@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
   <meta name="mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <title>Play Coach</title>
   <script>
     if ("serviceWorker" in navigator) {
@@ -18,15 +19,15 @@
       });
     }
   </script>
-  <link rel="stylesheet" href="style.css?v=6" />
-  <meta name="theme-color" content="#1c1916" />
+  <link rel="stylesheet" href="style.css?v=7" />
+  <meta name="theme-color" content="#312e2b" />
 </head>
 <body>
   <header class="coach-bar">
     <div class="magnus" aria-hidden="true"></div>
     <div class="coach-copy">
       <div class="coach-row">
-        <strong class="brand">Magnus</strong>
+        <strong class="brand">Magnus Carlsen</strong>
         <span id="coachTitle" class="badge idle">Coach</span>
       </div>
       <p id="coachText">Alright. Let's play.</p>
@@ -43,10 +44,15 @@
       <div id="evalFill" class="eval-fill"></div>
     </div>
     <div class="board-wrap">
-      <div class="player top">
-        <span class="avatar black"></span>
-        <span>Coach bot</span>
-        <span id="oppRating" class="muted">1000</span>
+      <div id="playerTop" class="player-bar top">
+        <div class="player-info">
+          <div class="avatar-wrap"><span class="avatar black"></span></div>
+          <div class="player-meta">
+            <span class="player-name">Coach</span>
+            <span id="oppRating" class="player-rating">1000</span>
+          </div>
+        </div>
+        <div id="clockTop" class="player-clock">∞</div>
       </div>
       <div class="board-frame">
         <div id="board" class="board"></div>
@@ -67,9 +73,14 @@
           <line id="hintArrow" class="hint hidden" x1="0" y1="0" x2="0" y2="0" marker-end="url(#hintHead)"></line>
         </svg>
       </div>
-      <div class="player bottom">
-        <span class="avatar white"></span>
-        <span>You</span>
+      <div id="playerBottom" class="player-bar bottom active">
+        <div class="player-info">
+          <div class="avatar-wrap"><span class="avatar white"></span></div>
+          <div class="player-meta">
+            <span class="player-name">You</span>
+          </div>
+        </div>
+        <div id="clockBottom" class="player-clock">∞</div>
       </div>
     </div>
   </main>
@@ -79,15 +90,15 @@
     <div class="tools">
       <button id="hintBtn" type="button">Hint</button>
       <button id="undoBtn" type="button">Undo</button>
-      <button id="newGame" type="button" class="ghost">New</button>
+      <button id="newGame" type="button" class="ghost">New Game</button>
       <button id="settingsBtn" type="button" class="ghost" aria-label="Settings">⚙</button>
     </div>
   </footer>
 
   <div id="settings" class="sheet hidden">
     <div class="sheet-card">
-      <h3>Coach options</h3>
-      <label><input id="optSuggest" type="checkbox" /> Suggestion arrows (only after Hint / Idea)</label>
+      <h3>Settings</h3>
+      <label><input id="optSuggest" type="checkbox" /> Suggestion arrows (Hint / Idea only)</label>
       <label><input id="optThreat" type="checkbox" checked /> Threat arrows</label>
       <label><input id="optEval" type="checkbox" checked /> Evaluation bar</label>
       <button id="closeSettings" type="button">Done</button>
@@ -100,11 +111,11 @@
         ? "/chess-play-coach/"
         : "./";
       var s = document.createElement("script");
-      s.src = base + "game.js?v=6";
+      s.src = base + "game.js?v=7";
       s.onerror = function () {
         document.body.insertAdjacentHTML(
           "afterbegin",
-          '<p style="padding:12px;background:#c23b22;color:#fff">Could not load game.js</p>'
+          '<p style="padding:12px;background:#fa412d;color:#fff">Could not load game.js</p>'
         );
       };
       document.body.appendChild(s);

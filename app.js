@@ -51,6 +51,8 @@ const optSuggest = document.getElementById("optSuggest");
 const optThreat = document.getElementById("optThreat");
 const optEval = document.getElementById("optEval");
 const installBtn = document.getElementById("installBtn");
+const playerTop = document.getElementById("playerTop");
+const playerBottom = document.getElementById("playerBottom");
 
 const LEVELS = E.LEVELS;
 let selectedLevel = 5;
@@ -299,6 +301,12 @@ function renderBoard(force) {
   renderThreats();
   evalCol.classList.toggle("off", !options.evaluationBar);
   evalFill.style.height = Math.max(4, Math.min(96, state.evalBar || 50)) + "%";
+  if (playerTop) {
+    playerTop.classList.toggle("active", state.turn === "1" && !state.gameOver);
+  }
+  if (playerBottom) {
+    playerBottom.classList.toggle("active", state.turn === "0" && !state.gameOver);
+  }
   undoBtn.disabled = !state.canUndo || !!state.thinking;
   hintBtn.disabled = !!state.thinking || !!state.gameOver || state.turn !== "0";
   renderCoach();
