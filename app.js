@@ -217,7 +217,10 @@ function renderCoach() {
   coachTitle.textContent = state.thinking ? "Thinking" : coach.title || "Coach";
   coachTitle.className = "badge " + kind;
   coachText.textContent = state.thinking ? "Thinking..." : coach.text || "";
-  if (tipText) tipText.textContent = state.thinking ? "" : state.tip || coach.tip || "";
+  if (tipText) {
+    const impact = state.coach && state.coach.impact;
+    tipText.textContent = state.thinking ? "" : impact || state.tip || (state.coach && state.coach.tip) || "";
+  }
 }
 
 function ensureBoard() {
@@ -392,7 +395,11 @@ function sendMove(move) {
   state.suggestion = null;
   state.showSuggestion = false;
   refreshMeta();
-  state.coach = speak(analysis.kind, { tip: state.tip });
+  state.coach = speak(analysis.kind, {
+    why: analysis.why || "",
+    impact: analysis.impact || "",
+    tip: analysis.impact || state.tip,
+  });
   checkGameOver();
   renderBoard(true);
   busy = false;

@@ -99,18 +99,28 @@ function magnusSpeak(kind, extra) {
         ? "idle"
         : kindKey;
 
+  const why = extra.why || "";
+  const impact = extra.impact || "";
   let text = extra.text || pick(lines[kindKey]);
-  if (tip && ["good", "excellent", "best", "book", "yourMove", "start", "suggest"].includes(kindKey)) {
-    text = withTip(text, tip);
+
+  if (why && ["best", "excellent", "good", "book", "inaccuracy", "mistake", "blunder", "brilliant"].includes(kindKey)) {
+    text = `${text} ${why}`;
+  }
+
+  let tipOut = impact || tip;
+  if (!impact && tip && ["good", "excellent", "best", "book", "yourMove", "start", "suggest"].includes(kindKey)) {
+    tipOut = tip;
   } else if (kindKey === "tip") {
-    text = tip || text;
+    tipOut = tip || text;
   }
 
   return {
     kind: mappedKind,
     title: titleMap[kindKey] || "Coach",
     text,
-    tip: tip || "",
+    tip: tipOut || "",
+    why,
+    impact,
   };
 }
 
