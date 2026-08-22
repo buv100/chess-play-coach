@@ -5,20 +5,28 @@
   let lastKey = "";
   let voicesReady = false;
   let pickVoice = null;
-  let voiceProfile = { rate: 0.86, pitch: 1.02, lang: "en-US", volume: 0.92 };
+  let voiceProfile = { rate: 0.82, pitch: 0.92, lang: "en-GB", volume: 0.95 };
 
   function scoreVoice(v) {
     let score = 0;
     const name = v.name || "";
-    if (/Natural|Neural|Premium|Enhanced|Online/i.test(name)) score += 120;
-    if (/Microsoft (Aria|Jenny|Guy|Sonia|Libby|Natasha)/i.test(name)) score += 100;
-    if (/Google (US English|UK English Female)/i.test(name)) score += 90;
-    if (/Samantha|Karen|Moira|Tessa|Allison|Victoria|Serena|Kate/i.test(name)) score += 75;
-    if (/Daniel|Olivia|Emma/i.test(name)) score += 55;
-    if (/Female/i.test(name)) score += 12;
-    if (v.localService) score += 20;
-    if (v.lang && v.lang.startsWith("en")) score += 8;
-    if (/Zira|David Desktop|Mark|Richard|Fred|Helena|George/i.test(name)) score -= 25;
+    const lang = v.lang || "";
+
+    if (/Natural|Neural|Premium|Enhanced|Wavenet/i.test(name)) score += 130;
+    if (/Microsoft (Guy|Ryan|Christopher|Eric|Steffan) Natural/i.test(name)) score += 120;
+    if (/Google UK English Male|Google US English/i.test(name) && !/Female/i.test(name)) score += 100;
+    if (/Daniel|James|Tom|Mark|George|Lee|Oliver|Colin|Malcolm/i.test(name) && !/Female/i.test(name)) score += 90;
+    if (/David|Alex|Fred|Microsoft David/i.test(name) && !/Female|Desktop/i.test(name)) score += 70;
+    if (/Male|male/.test(name)) score += 30;
+    if (lang.startsWith("en-GB")) score += 15;
+    if (lang.startsWith("en")) score += 8;
+    if (v.localService) score += 18;
+
+    if (/Female|Samantha|Karen|Aria|Jenny|Zira|Sonia|Libby|Natasha|Victoria|Serena|Moira|Tessa|Allison|Emma|Olivia/i.test(name)) {
+      score -= 80;
+    }
+    if (/Zira|Helena|Catherine/i.test(name)) score -= 50;
+
     return score;
   }
 
@@ -77,16 +85,24 @@
     }
   }
 
+  function humanizeText(text) {
+    return String(text)
+      .replace(/\s*→\s*/g, " to ")
+      .replace(/\s*—\s*/g, ". ")
+      .replace(/\s+/g, " ")
+      .trim();
+  }
+
   function speakLine(text, opts, done) {
     if (!window.speechSynthesis || !text) {
       if (done) done();
       return;
     }
-    const utter = new SpeechSynthesisUtterance(text);
-    utter.lang = voiceProfile.lang || "en-US";
-    utter.rate = opts.rate ?? voiceProfile.rate ?? 0.86;
-    utter.pitch = opts.pitch ?? voiceProfile.pitch ?? 1.02;
-    utter.volume = opts.volume ?? voiceProfile.volume ?? 0.92;
+    const utter = new SpeechSynthesisUtterance(humanizeText(text));
+    utter.lang = voiceProfile.lang || "en-GB";
+    utter.rate = opts.rate ?? voiceProfile.rate ?? 0.82;
+    utter.pitch = opts.pitch ?? voiceProfile.pitch ?? 0.92;
+    utter.volume = opts.volume ?? voiceProfile.volume ?? 0.95;
     if (pickVoice) utter.voice = pickVoice;
     utter.onstart = () => {
       if (opts.shout) {
@@ -112,9 +128,7 @@
 
   function speakCoach(coach, thinking, options) {
     options = options || {};
-    if (!coachVoiceEnabled() || thinking) {
-      return;
-    }
+    if (!coachVoiceEnabled() || thinking) return;
     if (!voicesReady) loadVoices();
 
     const main = (coach && coach.text) || "";
@@ -129,9 +143,9 @@
 
     const shout = options.skipShout ? null : coach && coach.shout;
     const shoutKind = coach && coach.ratingKind;
-    const baseRate = voiceProfile.rate ?? 0.86;
-    const basePitch = voiceProfile.pitch ?? 1.02;
-    const baseVol = voiceProfile.volume ?? 0.92;
+    const baseRate = voiceProfile.rate ?? 0.82;
+    const basePitch = voiceProfile.pitch ?? 0.92;
+    const baseVol = voiceProfile.volume ?? 0.95;
 
     const speakMain = () => {
       speakLine(key, { rate: baseRate, pitch: basePitch, volume: baseVol, shout: false });
@@ -143,9 +157,9 @@
         {
           shout: true,
           shoutKind: shoutKind || "brilliant",
-          rate: Math.min(1.15, baseRate + 0.12),
-          pitch: Math.min(1.25, basePitch + 0.12),
-          volume: Math.min(1, baseVol + 0.06),
+          rate: Math.min(1.05, baseRate + 0.08),
+          pitch: Math.min(1.08, basePitch + 0.06),
+          volume: baseVol,
         },
         speakMain
       );
@@ -167,7 +181,8 @@
   }
 
   function setProfile(profile) {
-    voiceProfile = Object.assign({ rate: 0.86, pitch: 1.02, lang: "en-US", volume: 0.92 }, profile || {});
+    voiceProfile = Object.assign({ rate: 0.82, pitch: 0.92, lang: "en-GB", volume: 0.95 }, profile || {});
+    if (profile && profile.lang) voiceProfile.lang = profile.lang;
   }
 
   window.CoachVoice = {

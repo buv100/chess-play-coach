@@ -852,8 +852,10 @@ const COACHES = {
     id: "magnus",
     name: "Magnus Carlsen",
     tagline: "Practical chess",
-    avatar: "magnus.svg",
-    voice: { rate: 0.86, pitch: 1.02, volume: 0.92 },
+    styleLine: "Simplify, squeeze, win endgames",
+    avatar: "coaches/magnus.jpg",
+    avatarFallback: "magnus.svg",
+    voice: { rate: 0.82, pitch: 0.9, volume: 0.95, lang: "en-GB" },
     reframe: {
       prefix: "In my style â€”",
       suffix: "I simplify and squeeze â€” no need to force anything.",
@@ -897,8 +899,10 @@ const COACHES = {
     id: "kasparov",
     name: "Garry Kasparov",
     tagline: "Dynamic attack",
-    avatar: "kasparov.svg",
-    voice: { rate: 0.88, pitch: 1.04, volume: 0.92 },
+    styleLine: "Initiative, attack, never passive",
+    avatar: "coaches/kasparov.jpg",
+    avatarFallback: "kasparov.svg",
+    voice: { rate: 0.84, pitch: 0.93, volume: 0.95, lang: "en-GB" },
     reframe: {
       prefix: "Dynamic chess â€”",
       suffix: "Initiative is everything. Make them defend!",
@@ -942,8 +946,10 @@ const COACHES = {
     id: "tal",
     name: "Mikhail Tal",
     tagline: "Tactical wizard",
-    avatar: "tal.svg",
-    voice: { rate: 0.87, pitch: 1.05, volume: 0.92 },
+    styleLine: "Sacrifices, chaos, combinations",
+    avatar: "coaches/tal.jpg",
+    avatarFallback: "tal.svg",
+    voice: { rate: 0.83, pitch: 0.94, volume: 0.95, lang: "en-GB" },
     reframe: {
       prefix: "Tal magic â€”",
       suffix: "Complications favor the brave â€” make them calculate nightmares.",
@@ -987,8 +993,10 @@ const COACHES = {
     id: "fischer",
     name: "Bobby Fischer",
     tagline: "Precision & best move",
-    avatar: "fischer.svg",
-    voice: { rate: 0.84, pitch: 0.98, volume: 0.92 },
+    styleLine: "Find the best move â€” always",
+    avatar: "coaches/fischer.jpg",
+    avatarFallback: "fischer.svg",
+    voice: { rate: 0.8, pitch: 0.88, volume: 0.95, lang: "en-US" },
     reframe: {
       prefix: "Best move chess â€”",
       suffix: "If you see a good move, look for a better one.",
@@ -1032,8 +1040,10 @@ const COACHES = {
     id: "capablanca",
     name: "JosÃ© Capablanca",
     tagline: "Simple & natural",
-    avatar: "capablanca.svg",
-    voice: { rate: 0.85, pitch: 1.0, volume: 0.92 },
+    styleLine: "Natural moves, pure technique",
+    avatar: "coaches/capablanca.svg",
+    avatarFallback: "capablanca.svg",
+    voice: { rate: 0.81, pitch: 0.9, volume: 0.95, lang: "en-GB" },
     reframe: {
       prefix: "Natural chess â€”",
       suffix: "Simple moves are often the strongest â€” don't force what isn't there.",
@@ -1077,8 +1087,10 @@ const COACHES = {
     id: "karpov",
     name: "Anatoly Karpov",
     tagline: "Positional squeeze",
-    avatar: "karpov.svg",
-    voice: { rate: 0.9, pitch: 0.9 },
+    styleLine: "Restrict, squeeze, prophylaxis",
+    avatar: "coaches/karpov.svg",
+    avatarFallback: "karpov.svg",
+    voice: { rate: 0.8, pitch: 0.89, volume: 0.95, lang: "en-GB" },
     reframe: {
       prefix: "Positional play â€”",
       suffix: "Restrict their plans first â€” then the attack plays itself.",
@@ -1320,6 +1332,8 @@ const coachText = document.getElementById("coachText");
 const coachBrand = document.getElementById("coachBrand");
 const coachAvatar = document.getElementById("coachAvatar");
 const coachPicker = document.getElementById("coachPicker");
+const coachPickerBar = document.getElementById("coachPickerBar");
+const coachStyle = document.getElementById("coachStyle");
 const oppName = document.getElementById("oppName");
 const tipText = document.getElementById("tipText");
 const hintBtn = document.getElementById("hintBtn");
@@ -1573,35 +1587,31 @@ function renderLevels() {
   if (oppRating) oppRating.textContent = found ? String(found.rating) : "";
 }
 
-function applyCoachUI() {
-  if (!CoachLib) return;
-  const coach = CoachLib.getCoach();
-  if (coachBrand) coachBrand.textContent = coach.name;
-  if (coachAvatar) {
-    coachAvatar.src = coach.avatar;
-    coachAvatar.alt = coach.name + " AI Coach";
-  }
-  if (oppName) oppName.textContent = coach.name.split(" ").pop() || "Coach";
-  if (window.CoachVoice && coach.voice) {
-    window.CoachVoice.setProfile(coach.voice);
-  }
-  document.title = coach.name + " — Play Coach";
+function setCoachAvatar(img, coach) {
+  if (!img || !coach) return;
+  const fb = coach.avatarFallback || coach.avatar;
+  img.onerror = function () {
+    img.onerror = null;
+    img.src = fb;
+  };
+  img.src = coach.avatar;
+  img.alt = coach.name;
 }
 
-function renderCoachPicker() {
-  if (!coachPicker || !CoachLib) return;
-  const current = CoachLib.getCoach().id;
-  coachPicker.innerHTML = CoachLib.listCoaches()
-    .map(
-      (c) =>
-        `<button type="button" class="coach-card${c.id === current ? " on" : ""}" data-coach="${c.id}" aria-pressed="${c.id === current}">` +
-        `<img src="${c.avatar}" alt="" class="coach-card-img" />` +
-        `<span class="coach-card-name">${c.name.split(" ").pop()}</span>` +
-        `<span class="coach-card-tag">${c.tagline}</span>` +
-        `</button>`
-    )
-    .join("");
-  coachPicker.querySelectorAll("[data-coach]").forEach((btn) => {
+function coachCardHtml(c, current) {
+  const fb = c.avatarFallback || c.avatar;
+  return (
+    `<button type="button" class="coach-card${c.id === current ? " on" : ""}" data-coach="${c.id}" aria-pressed="${c.id === current}" title="${c.name} — ${c.styleLine || c.tagline}">` +
+    `<img src="${c.avatar}" alt="${c.name}" class="coach-card-img" onerror="this.onerror=null;this.src='${fb}'" />` +
+    `<span class="coach-card-name">${c.name.split(" ").pop()}</span>` +
+    `<span class="coach-card-tag">${c.styleLine || c.tagline}</span>` +
+    `</button>`
+  );
+}
+
+function wireCoachPicker(el) {
+  if (!el || !CoachLib) return;
+  el.querySelectorAll("[data-coach]").forEach((btn) => {
     btn.addEventListener("click", () => {
       CoachLib.setCoach(btn.dataset.coach);
       applyCoachUI();
@@ -1611,6 +1621,33 @@ function renderCoachPicker() {
       renderBoard(true);
     });
   });
+}
+
+function applyCoachUI() {
+  if (!CoachLib) return;
+  const coach = CoachLib.getCoach();
+  if (coachBrand) coachBrand.textContent = coach.name;
+  if (coachStyle) coachStyle.textContent = coach.styleLine || coach.tagline || "";
+  if (coachAvatar) setCoachAvatar(coachAvatar, coach);
+  if (oppName) oppName.textContent = coach.name.split(" ").pop() || "Coach";
+  if (window.CoachVoice && coach.voice) {
+    window.CoachVoice.setProfile(coach.voice);
+  }
+  document.title = coach.name + " — Play Coach";
+}
+
+function renderCoachPicker() {
+  if (!CoachLib) return;
+  const current = CoachLib.getCoach().id;
+  const html = CoachLib.listCoaches().map((c) => coachCardHtml(c, current)).join("");
+  if (coachPicker) {
+    coachPicker.innerHTML = html;
+    wireCoachPicker(coachPicker);
+  }
+  if (coachPickerBar) {
+    coachPickerBar.innerHTML = html;
+    wireCoachPicker(coachPickerBar);
+  }
 }
 
 function renderCoach() {

@@ -36,6 +36,8 @@ const coachText = document.getElementById("coachText");
 const coachBrand = document.getElementById("coachBrand");
 const coachAvatar = document.getElementById("coachAvatar");
 const coachPicker = document.getElementById("coachPicker");
+const coachPickerBar = document.getElementById("coachPickerBar");
+const coachStyle = document.getElementById("coachStyle");
 const oppName = document.getElementById("oppName");
 const tipText = document.getElementById("tipText");
 const hintBtn = document.getElementById("hintBtn");
@@ -289,35 +291,31 @@ function renderLevels() {
   if (oppRating) oppRating.textContent = found ? String(found.rating) : "";
 }
 
-function applyCoachUI() {
-  if (!CoachLib) return;
-  const coach = CoachLib.getCoach();
-  if (coachBrand) coachBrand.textContent = coach.name;
-  if (coachAvatar) {
-    coachAvatar.src = coach.avatar;
-    coachAvatar.alt = coach.name + " AI Coach";
-  }
-  if (oppName) oppName.textContent = coach.name.split(" ").pop() || "Coach";
-  if (window.CoachVoice && coach.voice) {
-    window.CoachVoice.setProfile(coach.voice);
-  }
-  document.title = coach.name + " — Play Coach";
+function setCoachAvatar(img, coach) {
+  if (!img || !coach) return;
+  const fb = coach.avatarFallback || coach.avatar;
+  img.onerror = function () {
+    img.onerror = null;
+    img.src = fb;
+  };
+  img.src = coach.avatar;
+  img.alt = coach.name;
 }
 
-function renderCoachPicker() {
-  if (!coachPicker || !CoachLib) return;
-  const current = CoachLib.getCoach().id;
-  coachPicker.innerHTML = CoachLib.listCoaches()
-    .map(
-      (c) =>
-        `<button type="button" class="coach-card${c.id === current ? " on" : ""}" data-coach="${c.id}" aria-pressed="${c.id === current}">` +
-        `<img src="${c.avatar}" alt="" class="coach-card-img" />` +
-        `<span class="coach-card-name">${c.name.split(" ").pop()}</span>` +
-        `<span class="coach-card-tag">${c.tagline}</span>` +
-        `</button>`
-    )
-    .join("");
-  coachPicker.querySelectorAll("[data-coach]").forEach((btn) => {
+function coachCardHtml(c, current) {
+  const fb = c.avatarFallback || c.avatar;
+  return (
+    `<button type="button" class="coach-card${c.id === current ? " on" : ""}" data-coach="${c.id}" aria-pressed="${c.id === current}" title="${c.name} — ${c.styleLine || c.tagline}">` +
+    `<img src="${c.avatar}" alt="${c.name}" class="coach-card-img" onerror="this.onerror=null;this.src='${fb}'" />` +
+    `<span class="coach-card-name">${c.name.split(" ").pop()}</span>` +
+    `<span class="coach-card-tag">${c.styleLine || c.tagline}</span>` +
+    `</button>`
+  );
+}
+
+function wireCoachPicker(el) {
+  if (!el || !CoachLib) return;
+  el.querySelectorAll("[data-coach]").forEach((btn) => {
     btn.addEventListener("click", () => {
       CoachLib.setCoach(btn.dataset.coach);
       applyCoachUI();
@@ -327,6 +325,33 @@ function renderCoachPicker() {
       renderBoard(true);
     });
   });
+}
+
+function applyCoachUI() {
+  if (!CoachLib) return;
+  const coach = CoachLib.getCoach();
+  if (coachBrand) coachBrand.textContent = coach.name;
+  if (coachStyle) coachStyle.textContent = coach.styleLine || coach.tagline || "";
+  if (coachAvatar) setCoachAvatar(coachAvatar, coach);
+  if (oppName) oppName.textContent = coach.name.split(" ").pop() || "Coach";
+  if (window.CoachVoice && coach.voice) {
+    window.CoachVoice.setProfile(coach.voice);
+  }
+  document.title = coach.name + " — Play Coach";
+}
+
+function renderCoachPicker() {
+  if (!CoachLib) return;
+  const current = CoachLib.getCoach().id;
+  const html = CoachLib.listCoaches().map((c) => coachCardHtml(c, current)).join("");
+  if (coachPicker) {
+    coachPicker.innerHTML = html;
+    wireCoachPicker(coachPicker);
+  }
+  if (coachPickerBar) {
+    coachPickerBar.innerHTML = html;
+    wireCoachPicker(coachPickerBar);
+  }
 }
 
 function renderCoach() {

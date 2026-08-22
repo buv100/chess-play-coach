@@ -19,25 +19,26 @@
       });
     }
   </script>
-  <link rel="stylesheet" href="style.css?v=14" />
+  <link rel="stylesheet" href="style.css?v=15" />
   <meta name="theme-color" content="#312e2b" />
 </head>
 <body>
   <header class="coach-panel">
     <div class="coach-top">
       <div id="magnusAvatar" class="magnus-avatar">
-        <img id="coachAvatar" class="magnus-photo" src="magnus.svg" alt="Magnus Carlsen AI Coach" />
-        <span class="ai-tag">AI</span>
+        <img id="coachAvatar" class="magnus-photo" src="coaches/magnus.jpg" alt="Magnus Carlsen" />
       </div>
       <div class="coach-identity">
         <div class="coach-row">
           <strong id="coachBrand" class="brand">Magnus Carlsen</strong>
           <span class="play-coach-label">Play Coach</span>
         </div>
+        <span id="coachStyle" class="coach-style-line">Simplify, squeeze, win endgames</span>
         <span id="coachTitle" class="badge idle">Coach</span>
       </div>
       <button id="voiceBtn" type="button" class="voice-toggle" aria-label="Mute coach voice">🔊</button>
     </div>
+    <div id="coachPickerBar" class="coach-strip" aria-label="Choose your coach"></div>
     <div class="coach-speech">
       <p id="coachText">Alright. Let's play.</p>
       <p id="tipText" class="tip-line"></p>
@@ -123,7 +124,7 @@
         ? "/chess-play-coach/"
         : "./";
       var v = document.createElement("script");
-      v.src = base + "voice.js?v=14";
+      v.src = base + "voice.js?v=15";
       v.onload = function () {
         document.body.appendChild(s);
       };
@@ -132,7 +133,7 @@
       };
       document.body.appendChild(v);
       var s = document.createElement("script");
-      s.src = base + "game.js?v=14";
+      s.src = base + "game.js?v=15";
       s.onerror = function () {
         document.body.insertAdjacentHTML(
           "afterbegin",
